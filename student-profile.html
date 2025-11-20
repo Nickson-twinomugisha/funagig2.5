@@ -614,160 +614,121 @@
                         }
                     });
                     
-                    // Update profile image with the correct path
-                    if (response.file_path && profileImage) {
-                        // Construct the correct URL - handle the /funagig/ base path
-                        let imageUrl = response.file_path;
-                        if (!imageUrl.startsWith('http') && !imageUrl.startsWith('/funagig/')) {
-                            // Add /funagig/ prefix if not already present
+                    console.log('Upload response:', response);
+                    
+                    // Update profile image with the correct URL
+                    if (profileImage) {
+                        // Determine the image URL - prefer file_url, fallback to file_path
+                        let imageUrl = response.file_url || response.file_path;
+                        
+                        if (!imageUrl) {
+                            console.error('No file_url or file_path in response');
+                            throw new Error('No image URL returned from server');
+                        }
+                        
+                        // If not a full URL, construct it
+                        if (!imageUrl.startsWith('http')) {
+                            // Get base URL from current location
+                            const baseUrl = window.location.origin;
                             if (imageUrl.startsWith('/')) {
-                                imageUrl = '/funagig' + imageUrl;
+                                imageUrl = baseUrl + imageUrl;
                             } else {
-                                imageUrl = '/funagig/' + imageUrl;
+                                // Relative path - construct from current path
+                                const path = window.location.pathname.split('/').slice(0, -1).join('/');
+                                imageUrl = baseUrl + path + '/' + imageUrl;
                             }
                         }
                         
+                        console.log('Setting image URL to:', imageUrl);
+                        
                         // Set image source with cache busting
                         const timestamp = new Date().getTime();
+                        const finalImageUrl = imageUrl + '?t=' + timestamp;
                         
                         // Clear avatar text first
                         profileAvatar.textContent = '';
                         profileAvatar.style.background = 'transparent';
-                        
-                        // Set up load handlers before setting src
-                        profileImage.onload = function() {
-                            console.log('Profile image loaded successfully:', imageUrl);
-                            
-                            // Remove all text nodes from avatar
-                            const textNodes = [];
-                            const walker = document.createTreeWalker(
-                                profileAvatar,
-                                NodeFilter.SHOW_TEXT,
-                                null,
-                                false
-                            );
-                            let node;
-                            while (node = walker.nextNode()) {
-                                if (node.textContent.trim()) {
-                                    textNodes.push(node);
-                                }
-                            }
-                            textNodes.forEach(textNode => textNode.remove());
-                            
-                            // Clear all child text nodes
-                            Array.from(profileAvatar.childNodes).forEach(child => {
-                                if (child.nodeType === Node.TEXT_NODE) {
-                                    child.remove();
-                                }
-                            });
-                            
-                            // Clear textContent completely - this is critical
-                            profileAvatar.textContent = '';
-                            profileAvatar.innerHTML = profileAvatar.innerHTML.replace(/[^<]*/, ''); // Remove any remaining text
-                            
-                            // Ensure image is visible and on top with all necessary styles using !important
-                            profileImage.setAttribute('style', 
-                                'display: block !important; ' +
-                                'visibility: visible !important; ' +
-                                'opacity: 1 !important; ' +
-                                'z-index: 999 !important; ' +
-                                'position: absolute !important; ' +
-                                'top: 0 !important; ' +
-                                'left: 0 !important; ' +
-                                'width: 100% !important; ' +
-                                'height: 100% !important; ' +
-                                'object-fit: cover !important; ' +
-                                'border-radius: 50% !important; ' +
-                                'background: #fff !important;'
-                            );
-                            
-                            // Clear avatar background and ensure no text shows
-                            profileAvatar.style.background = 'transparent';
-                            profileAvatar.style.color = 'transparent';
-                            profileAvatar.style.fontSize = '0'; // Hide any remaining text
-                            
-                            // Force browser repaint
-                            void profileAvatar.offsetHeight;
-                            void profileImage.offsetHeight;
-                            
-                            // Verify image is actually visible
-                            const computedStyle = window.getComputedStyle(profileImage);
-                            console.log('=== IMAGE VISIBILITY CHECK ===');
-                            console.log('Computed display:', computedStyle.display);
-                            console.log('Computed visibility:', computedStyle.visibility);
-                            console.log('Computed opacity:', computedStyle.opacity);
-                            console.log('Computed z-index:', computedStyle.zIndex);
-                            console.log('Computed position:', computedStyle.position);
-                            console.log('Image complete:', profileImage.complete);
-                            console.log('Image natural dimensions:', profileImage.naturalWidth, 'x', profileImage.naturalHeight);
-                            console.log('Avatar textContent length:', profileAvatar.textContent.length);
-                            console.log('Avatar innerHTML:', profileAvatar.innerHTML.substring(0, 100));
-                        };
-                        
-                        profileImage.onerror = function(e) {
-                            console.error('Failed to load profile image:', imageUrl);
-                            console.error('Trying alternative URLs...');
-                            
-                            // Try alternative URL formats
-                            const alternatives = [
-                                '/funagig/' + response.file_path,
-                                '/' + response.file_path,
-                                response.file_url,
-                                'http://localhost/funagig/' + response.file_path
-                            ];
-                            
-                            let altIndex = 0;
-                            const tryNext = () => {
-                                if (altIndex < alternatives.length && alternatives[altIndex]) {
-                                    const altUrl = alternatives[altIndex] + '?t=' + timestamp;
-                                    console.log('Trying alternative URL:', altUrl);
-                                    profileImage.src = altUrl;
-                                    altIndex++;
-                                } else {
-                                    // Fallback to initials if all URLs fail
-                                    console.error('All image URLs failed, falling back to initials');
-                                    profileImage.style.display = 'none';
-                                    const user = Auth.getUser();
-                                    if (user && profileAvatar) {
-                                        profileAvatar.textContent = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U';
-                                        profileAvatar.style.background = '#e2e8f0';
-                                    }
-                                }
-                            };
-                            
-                            // Set new error handler that tries next alternative
-                            profileImage.onerror = tryNext;
-                            tryNext();
-                        };
-                        
-                        // Clear text immediately before setting image
-                        profileAvatar.textContent = '';
                         profileAvatar.style.color = 'transparent';
                         
-                        // Ensure image element is properly configured
+                        // Ensure image element is properly configured BEFORE setting src
                         profileImage.style.position = 'absolute';
                         profileImage.style.top = '0';
                         profileImage.style.left = '0';
                         profileImage.style.width = '100%';
                         profileImage.style.height = '100%';
-                        profileImage.style.zIndex = '10';
-                        
-                        // Now set the image source
-                        profileImage.src = imageUrl + '?t=' + timestamp;
+                        profileImage.style.zIndex = '999';
+                        profileImage.style.objectFit = 'cover';
+                        profileImage.style.borderRadius = '50%';
                         profileImage.style.display = 'block';
                         profileImage.style.visibility = 'visible';
                         profileImage.style.opacity = '1';
+                        profileImage.style.background = '#fff';
+                        
+                        // Set up load handlers before setting src
+                        // Set up error handler with fallback URLs
+                        let errorAttempts = 0;
+                        const maxErrorAttempts = 3;
+                        const alternativeUrls = [
+                            response.file_url,
+                            response.file_path ? (window.location.origin + '/' + response.file_path) : null,
+                            response.file_path ? ('/funagig/' + response.file_path) : null
+                        ].filter(Boolean);
+                        
+                        profileImage.onerror = function() {
+                            errorAttempts++;
+                            console.error(`Failed to load profile image (attempt ${errorAttempts}):`, finalImageUrl);
+                            
+                            if (errorAttempts <= maxErrorAttempts && alternativeUrls[errorAttempts - 1]) {
+                                // Try alternative URL
+                                const altUrl = alternativeUrls[errorAttempts - 1] + '?t=' + timestamp;
+                                console.log('Trying alternative URL:', altUrl);
+                                profileImage.src = altUrl;
+                            } else {
+                                // All attempts failed - fallback to initials
+                                console.error('All image URLs failed, falling back to initials');
+                                const user = Auth.getUser();
+                                if (user && profileAvatar) {
+                                    const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U';
+                                    profileAvatar.textContent = initials;
+                                    profileAvatar.style.color = '';
+                                    profileAvatar.style.background = '#e2e8f0';
+                                    profileImage.style.display = 'none';
+                                }
+                                Toast.error('Failed to load profile image. Please try again.');
+                            }
+                        };
+                        
+                        profileImage.onload = function() {
+                            console.log('Profile image loaded successfully:', profileImage.src);
+                            
+                            // Clear avatar text completely
+                            profileAvatar.textContent = '';
+                            profileAvatar.style.background = 'transparent';
+                            profileAvatar.style.color = 'transparent';
+                            
+                            // Ensure image is visible
+                            profileImage.style.display = 'block';
+                            profileImage.style.visibility = 'visible';
+                            profileImage.style.opacity = '1';
+                        };
+                        
+                        // Now set the image source (this will trigger onload or onerror)
+                        console.log('Setting profile image src to:', finalImageUrl);
+                        profileImage.src = finalImageUrl;
                     }
                     
                     // Update user data in localStorage
                     const user = Auth.getUser();
                     if (user) {
-                        user.profile_image = response.file_path;
+                        // Store both file_path and file_url for consistency
+                        user.profile_image = response.file_path || response.file_url;
                         Auth.setUser(user);
                     }
                     
-                    // Reload profile data to ensure consistency
-                    await loadProfileData();
+                    // Reload profile data to ensure consistency (with a small delay to allow DB update)
+                    setTimeout(async () => {
+                        await loadProfileData();
+                    }, 500);
                     
                     Toast.success('Profile picture updated successfully');
                     

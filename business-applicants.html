@@ -202,6 +202,38 @@
         </main>
     </div>
 
+    <!-- Student Profile Modal (for accepted applicants) -->
+    <div id="studentProfileModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="studentProfileModalTitle">Student Profile</h2>
+                <button class="btn ghost" onclick="closeStudentProfileModal()" style="padding: 4px 8px;">&times;</button>
+            </div>
+            <div class="modal-body" id="studentProfileContent">
+                <div style="text-align: center; padding: 40px;">
+                    <div class="loading-spinner"></div>
+                    <p class="subtle">Loading profile...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Details Modal (for pending applicants) -->
+    <div id="applicationDetailsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="applicationDetailsModalTitle">Application Details</h2>
+                <button class="btn ghost" onclick="closeApplicationDetailsModal()" style="padding: 4px 8px;">&times;</button>
+            </div>
+            <div class="modal-body" id="applicationDetailsContent">
+                <div style="text-align: center; padding: 40px;">
+                    <div class="loading-spinner"></div>
+                    <p class="subtle">Loading details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
     <script>
         let allApplicants = []; // Store all applicants for filtering
@@ -427,12 +459,10 @@
                                     <button class="btn" onclick="acceptApplicant(${applicant.id}, '${escapeHtml(studentName)}')">Accept</button>
                                     <button class="btn ghost" style="color: var(--danger);" onclick="rejectApplicant(${applicant.id}, '${escapeHtml(studentName)}')">Reject</button>
                                 </div>
-                                ` : applicant.status === 'accepted' ? `
-                                <div class="flex gap-10">
-                                    <button class="btn secondary">View Details</button>
-                                </div>
-                                ` : ''}
+                                <button class="btn secondary" onclick="viewApplicationDetails(${applicant.id}, ${applicant.user_id}, '${escapeHtml(applicant.resume_path || '')}', '${escapeHtml(applicant.resume_url || '')}')">View Details</button>
+                                ` : `
                                 <button class="btn secondary" onclick="viewStudentProfile(${applicant.user_id})">View Profile</button>
+                                `}
                                 <button class="btn ghost" onclick="messageStudent(${applicant.user_id}, '${escapeHtml(studentName)}')">Message</button>
                             </div>
                         </div>
@@ -771,10 +801,344 @@
             }
         }
         
-        // View student profile (placeholder)
-        function viewStudentProfile(studentId) {
-            showNotification('Student profile view coming soon', 'info');
-            // TODO: Implement profile view modal or redirect
+        // View student profile (for accepted applicants)
+        async function viewStudentProfile(studentId) {
+            try {
+                const modal = document.getElementById('studentProfileModal');
+                const content = document.getElementById('studentProfileContent');
+                const title = document.getElementById('studentProfileModalTitle');
+                
+                if (modal) modal.style.display = 'flex';
+                if (content) {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <div class="loading-spinner"></div>
+                            <p class="subtle">Loading profile...</p>
+                        </div>
+                    `;
+                }
+                
+                // Fetch student profile
+                const response = await apiFetch(`/users/${studentId}`, {
+                    silent: true
+                });
+                
+                if (response.success && response.user) {
+                    displayStudentProfile(response.user);
+                } else {
+                    if (content) {
+                        content.innerHTML = `
+                            <div style="text-align: center; padding: 40px;">
+                                <p class="subtle">Failed to load student profile.</p>
+                                <button class="btn secondary mt-10" onclick="closeStudentProfileModal()">Close</button>
+                            </div>
+                        `;
+                    }
+                    Toast.error('Failed to load student profile');
+                }
+                
+            } catch (error) {
+                console.error('Error loading student profile:', error);
+                Toast.error('Failed to load student profile. Please try again.');
+                closeStudentProfileModal();
+            }
+        }
+        
+        // Display student profile in modal
+        function displayStudentProfile(student) {
+            const content = document.getElementById('studentProfileContent');
+            const title = document.getElementById('studentProfileModalTitle');
+            
+            if (!content) return;
+            
+            const initials = (student.name || 'S').split(' ').map(n => n[0]).join('').toUpperCase();
+            const skills = student.skills ? student.skills.split(',').map(s => s.trim()) : [];
+            const createdDate = new Date(student.created_at).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            if (title) title.textContent = escapeHtml(student.name || 'Student Profile');
+            
+            content.innerHTML = `
+                <div style="padding: 20px;">
+                    <!-- Header -->
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                        <div class="cover-img" style="width: 80px; height: 80px; font-size: 32px; position: relative; overflow: hidden;">
+                            ${student.profile_image ? 
+                                `<img src="${escapeHtml(student.profile_image)}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.textContent='${initials}';">` : 
+                                initials
+                            }
+                        </div>
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 8px 0; font-size: 24px; color: var(--text-primary);">${escapeHtml(student.name || 'Student')}</h3>
+                            ${student.is_verified ? '<span class="pill green" style="margin-bottom: 8px; display: inline-block;">Verified</span>' : ''}
+                            ${student.university || student.major ? 
+                                `<p class="subtle" style="margin: 4px 0;">${escapeHtml([student.university, student.major].filter(Boolean).join(' • ') || '')}</p>` : 
+                                ''
+                            }
+                            ${student.rating != null && !isNaN(parseFloat(student.rating)) ? 
+                                `<div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <span style="font-size: 18px; font-weight: bold; color: var(--primary);">${parseFloat(student.rating).toFixed(1)}</span>
+                                    <span style="color: #ffc107;">★</span>
+                                    <span class="subtle">(${student.total_ratings || 0} reviews)</span>
+                                </div>` : 
+                                ''
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- Details -->
+                    <div style="margin-bottom: 24px;">
+                        ${student.location ? 
+                            `<div style="margin-bottom: 12px;">
+                                <span class="subtle" style="display: block; margin-bottom: 4px;">Location</span>
+                                <span>${escapeHtml(student.location)}</span>
+                            </div>` : 
+                            ''
+                        }
+                        ${student.bio ? 
+                            `<div style="margin-bottom: 12px;">
+                                <span class="subtle" style="display: block; margin-bottom: 4px;">About</span>
+                                <p style="margin: 0; line-height: 1.6;">${escapeHtml(student.bio)}</p>
+                            </div>` : 
+                            ''
+                        }
+                        ${skills.length > 0 ? 
+                            `<div style="margin-bottom: 12px;">
+                                <span class="subtle" style="display: block; margin-bottom: 8px;">Skills</span>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    ${skills.map(skill => `<span class="pill blue">${escapeHtml(skill)}</span>`).join('')}
+                                </div>
+                            </div>` : 
+                            ''
+                        }
+                        <div style="margin-bottom: 12px;">
+                            <span class="subtle" style="display: block; margin-bottom: 4px;">Member Since</span>
+                            <span>${createdDate}</span>
+                        </div>
+                        ${student.completed_gigs_count !== undefined ? 
+                            `<div style="margin-bottom: 12px;">
+                                <span class="subtle" style="display: block; margin-bottom: 4px;">Completed Gigs</span>
+                                <span>${student.completed_gigs_count || 0}</span>
+                            </div>` : 
+                            ''
+                        }
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Close student profile modal
+        function closeStudentProfileModal() {
+            const modal = document.getElementById('studentProfileModal');
+            if (modal) modal.style.display = 'none';
+        }
+        
+        // View application details (for pending applicants - includes profile + CV)
+        async function viewApplicationDetails(applicationId, studentId, resumePath, resumeUrl) {
+            try {
+                const modal = document.getElementById('applicationDetailsModal');
+                const content = document.getElementById('applicationDetailsContent');
+                const title = document.getElementById('applicationDetailsModalTitle');
+                
+                if (modal) modal.style.display = 'flex';
+                if (content) {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <div class="loading-spinner"></div>
+                            <p class="subtle">Loading details...</p>
+                        </div>
+                    `;
+                }
+                
+                // Fetch student profile and application details
+                const [profileResponse, applicationResponse] = await Promise.all([
+                    apiFetch(`/users/${studentId}`, { silent: true }),
+                    apiFetch(`/applications?gig_id=${allApplicants.find(a => a.id === applicationId)?.gig_id || ''}`, { silent: true })
+                ]);
+                
+                const application = applicationResponse.success && applicationResponse.applications 
+                    ? applicationResponse.applications.find(a => a.id === applicationId)
+                    : allApplicants.find(a => a.id === applicationId);
+                
+                if (profileResponse.success && profileResponse.user) {
+                    displayApplicationDetails(profileResponse.user, application, resumePath, resumeUrl);
+                } else {
+                    if (content) {
+                        content.innerHTML = `
+                            <div style="text-align: center; padding: 40px;">
+                                <p class="subtle">Failed to load application details.</p>
+                                <button class="btn secondary mt-10" onclick="closeApplicationDetailsModal()">Close</button>
+                            </div>
+                        `;
+                    }
+                    Toast.error('Failed to load application details');
+                }
+                
+            } catch (error) {
+                console.error('Error loading application details:', error);
+                Toast.error('Failed to load application details. Please try again.');
+                closeApplicationDetailsModal();
+            }
+        }
+        
+        // Display application details in modal (profile + CV)
+        function displayApplicationDetails(student, application, resumePath, resumeUrl) {
+            const content = document.getElementById('applicationDetailsContent');
+            const title = document.getElementById('applicationDetailsModalTitle');
+            
+            if (!content) return;
+            
+            const initials = (student.name || 'S').split(' ').map(n => n[0]).join('').toUpperCase();
+            const skills = student.skills ? student.skills.split(',').map(s => s.trim()) : [];
+            const createdDate = new Date(student.created_at).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            // Use resume_url if provided, otherwise construct from resume_path
+            let finalResumeUrl = '';
+            let finalResumePath = '';
+            
+            if (resumeUrl) {
+                // Use the URL provided by API
+                finalResumeUrl = resumeUrl;
+                finalResumePath = resumePath || resumeUrl.split('/').pop();
+            } else if (application?.resume_url) {
+                // Use resume_url from application object
+                finalResumeUrl = application.resume_url;
+                finalResumePath = application.resume_path || finalResumeUrl.split('/').pop();
+            } else if (resumePath) {
+                // Construct URL from path
+                finalResumePath = resumePath;
+                if (resumePath.startsWith('http://') || resumePath.startsWith('https://')) {
+                    finalResumeUrl = resumePath;
+                } else {
+                    // Get base URL from current location
+                    const baseUrl = window.location.origin + window.location.pathname.split('/').slice(0, -1).join('/');
+                    finalResumeUrl = baseUrl + '/' + resumePath;
+                }
+            } else if (application?.resume_path) {
+                // Use resume_path from application object
+                finalResumePath = application.resume_path;
+                const baseUrl = window.location.origin + window.location.pathname.split('/').slice(0, -1).join('/');
+                finalResumeUrl = baseUrl + '/' + finalResumePath;
+            }
+            
+            if (title) title.textContent = `Application Details - ${escapeHtml(student.name || 'Student')}`;
+            
+            content.innerHTML = `
+                <div style="padding: 20px;">
+                    <!-- Student Profile Section -->
+                    <div style="margin-bottom: 32px;">
+                        <h3 style="margin: 0 0 16px 0; font-size: 20px; color: var(--text-primary); border-bottom: 2px solid var(--border); padding-bottom: 8px;">Student Profile</h3>
+                        
+                        <!-- Header -->
+                        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                            <div class="cover-img" style="width: 80px; height: 80px; font-size: 32px; position: relative; overflow: hidden;">
+                                ${student.profile_image ? 
+                                    `<img src="${escapeHtml(student.profile_image)}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.textContent='${initials}';">` : 
+                                    initials
+                                }
+                            </div>
+                            <div style="flex: 1;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 24px; color: var(--text-primary);">${escapeHtml(student.name || 'Student')}</h3>
+                                ${student.is_verified ? '<span class="pill green" style="margin-bottom: 8px; display: inline-block;">Verified</span>' : ''}
+                                ${student.university || student.major ? 
+                                    `<p class="subtle" style="margin: 4px 0;">${escapeHtml([student.university, student.major].filter(Boolean).join(' • ') || '')}</p>` : 
+                                    ''
+                                }
+                                ${student.rating != null && !isNaN(parseFloat(student.rating)) ? 
+                                    `<div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                        <span style="font-size: 18px; font-weight: bold; color: var(--primary);">${parseFloat(student.rating).toFixed(1)}</span>
+                                        <span style="color: #ffc107;">★</span>
+                                        <span class="subtle">(${student.total_ratings || 0} reviews)</span>
+                                    </div>` : 
+                                    ''
+                                }
+                            </div>
+                        </div>
+                        
+                        <!-- Details -->
+                        <div style="margin-bottom: 24px;">
+                            ${student.location ? 
+                                `<div style="margin-bottom: 12px;">
+                                    <span class="subtle" style="display: block; margin-bottom: 4px;">Location</span>
+                                    <span>${escapeHtml(student.location)}</span>
+                                </div>` : 
+                                ''
+                            }
+                            ${student.bio ? 
+                                `<div style="margin-bottom: 12px;">
+                                    <span class="subtle" style="display: block; margin-bottom: 4px;">About</span>
+                                    <p style="margin: 0; line-height: 1.6;">${escapeHtml(student.bio)}</p>
+                                </div>` : 
+                                ''
+                            }
+                            ${skills.length > 0 ? 
+                                `<div style="margin-bottom: 12px;">
+                                    <span class="subtle" style="display: block; margin-bottom: 8px;">Skills</span>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                        ${skills.map(skill => `<span class="pill blue">${escapeHtml(skill)}</span>`).join('')}
+                                    </div>
+                                </div>` : 
+                                ''
+                            }
+                            <div style="margin-bottom: 12px;">
+                                <span class="subtle" style="display: block; margin-bottom: 4px;">Member Since</span>
+                                <span>${createdDate}</span>
+                            </div>
+                            ${student.completed_gigs_count !== undefined ? 
+                                `<div style="margin-bottom: 12px;">
+                                    <span class="subtle" style="display: block; margin-bottom: 4px;">Completed Gigs</span>
+                                    <span>${student.completed_gigs_count || 0}</span>
+                                </div>` : 
+                                ''
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- Application Message Section -->
+                    ${application?.message ? `
+                        <div style="margin-bottom: 32px;">
+                            <h3 style="margin: 0 0 16px 0; font-size: 20px; color: var(--text-primary); border-bottom: 2px solid var(--border); padding-bottom: 8px;">Application Message</h3>
+                            <p style="margin: 0; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(application.message)}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Resume Section -->
+                    ${finalResumePath ? `
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="margin: 0 0 16px 0; font-size: 20px; color: var(--text-primary); border-bottom: 2px solid var(--border); padding-bottom: 8px;">Resume / CV</h3>
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border);">
+                                <div style="flex: 1;">
+                                    <p style="margin: 0 0 4px 0; font-weight: 500;">${escapeHtml(finalResumePath.split('/').pop())}</p>
+                                    <p class="subtle" style="margin: 0; font-size: 14px;">Resume submitted with application</p>
+                                </div>
+                                <a href="${finalResumeUrl}" download="${finalResumePath.split('/').pop()}" class="btn" style="white-space: nowrap;">
+                                    <span style="margin-right: 8px;">⬇</span> Download CV
+                                </a>
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="margin: 0 0 16px 0; font-size: 20px; color: var(--text-primary); border-bottom: 2px solid var(--border); padding-bottom: 8px;">Resume / CV</h3>
+                            <div style="padding: 16px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); text-align: center;">
+                                <p class="subtle" style="margin: 0;">No resume/CV submitted with this application</p>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+        
+        // Close application details modal
+        function closeApplicationDetailsModal() {
+            const modal = document.getElementById('applicationDetailsModal');
+            if (modal) modal.style.display = 'none';
         }
         
         // Message student - create conversation and redirect
@@ -798,6 +1162,19 @@
             div.textContent = text;
             return div.innerHTML;
         }
+        
+        // Close modals when clicking outside
+        window.addEventListener('click', function(event) {
+            const studentProfileModal = document.getElementById('studentProfileModal');
+            const applicationDetailsModal = document.getElementById('applicationDetailsModal');
+            
+            if (studentProfileModal && event.target === studentProfileModal) {
+                closeStudentProfileModal();
+            }
+            if (applicationDetailsModal && event.target === applicationDetailsModal) {
+                closeApplicationDetailsModal();
+            }
+        });
     </script>
 </body>
 </html>

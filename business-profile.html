@@ -558,29 +558,72 @@
                         }
                     });
                     
-                    // Update profile image with the correct path
-                    if (response.file_path && profileImage) {
-                        // Construct the correct URL - handle the /funagig/ base path
-                        let imageUrl = response.file_path;
-                        if (!imageUrl.startsWith('http') && !imageUrl.startsWith('/funagig/')) {
-                            // Add /funagig/ prefix if not already present
+                    console.log('Upload response:', response);
+                    
+                    // Update profile image with the correct URL
+                    if (profileImage) {
+                        // Determine the image URL - prefer file_url, fallback to file_path
+                        let imageUrl = response.file_url || response.file_path;
+                        
+                        if (!imageUrl) {
+                            console.error('No file_url or file_path in response');
+                            throw new Error('No image URL returned from server');
+                        }
+                        
+                        // If not a full URL, construct it
+                        if (!imageUrl.startsWith('http')) {
+                            // Get base URL from current location
+                            const baseUrl = window.location.origin;
                             if (imageUrl.startsWith('/')) {
-                                imageUrl = '/funagig' + imageUrl;
+                                imageUrl = baseUrl + imageUrl;
                             } else {
-                                imageUrl = '/funagig/' + imageUrl;
+                                // Relative path - construct from current path
+                                const path = window.location.pathname.split('/').slice(0, -1).join('/');
+                                imageUrl = baseUrl + path + '/' + imageUrl;
                             }
                         }
                         
+                        console.log('Setting image URL to:', imageUrl);
+                        
                         // Set image source with cache busting
                         const timestamp = new Date().getTime();
+                        const finalImageUrl = imageUrl + '?t=' + timestamp;
                         
                         // Clear avatar text first
                         profileAvatar.textContent = '';
                         profileAvatar.style.background = 'transparent';
+                        profileAvatar.style.color = 'transparent';
+                        
+                        // Ensure image element is properly configured BEFORE setting src
+                        profileImage.style.position = 'absolute';
+                        profileImage.style.top = '0';
+                        profileImage.style.left = '0';
+                        profileImage.style.width = '100%';
+                        profileImage.style.height = '100%';
+                        profileImage.style.zIndex = '999';
+                        profileImage.style.objectFit = 'cover';
+                        profileImage.style.borderRadius = '50%';
+                        profileImage.style.display = 'block';
+                        profileImage.style.visibility = 'visible';
+                        profileImage.style.opacity = '1';
+                        profileImage.style.background = '#fff';
                         
                         // Set up load handlers before setting src
+                        profileImage.onerror = function() {
+                            console.error('Failed to load profile image:', finalImageUrl);
+                            // Fallback to initials if image fails to load
+                            const user = Auth.getUser();
+                            if (user && profileAvatar) {
+                                const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'B';
+                                profileAvatar.textContent = initials;
+                                profileAvatar.style.color = '';
+                                profileImage.style.display = 'none';
+                            }
+                            Toast.error('Failed to load profile image. Please try again.');
+                        };
+                        
                         profileImage.onload = function() {
-                            console.log('Profile image loaded successfully:', imageUrl);
+                            console.log('Profile image loaded successfully:', finalImageUrl);
                             console.log('Image natural width:', profileImage.naturalWidth, 'height:', profileImage.naturalHeight);
                             
                             // Remove all text nodes from avatar
@@ -692,21 +735,24 @@
                         profileImage.style.height = '100%';
                         profileImage.style.zIndex = '10';
                         
-                        // Now set the image source
-                        profileImage.src = imageUrl + '?t=' + timestamp;
-                        profileImage.style.display = 'block';
-                        profileImage.style.visibility = 'visible';
-                        profileImage.style.opacity = '1';
+                        // Now set the image source (this will trigger onload)
+                        profileImage.src = finalImageUrl;
+                    } else {
+                        console.error('Profile image element not found');
+                        Toast.error('Failed to update profile image. Please refresh the page.');
                     }
                     
                     const user = Auth.getUser();
                     if (user) {
-                        user.profile_image = response.file_path;
+                        // Store both file_path and file_url for consistency
+                        user.profile_image = response.file_path || response.file_url;
                         Auth.setUser(user);
                     }
                     
-                    // Reload profile data to ensure consistency
-                    await loadProfileData();
+                    // Reload profile data to ensure consistency (with a small delay to allow DB update)
+                    setTimeout(async () => {
+                        await loadProfileData();
+                    }, 500);
                     
                     Toast.success('Profile picture updated successfully');
                     

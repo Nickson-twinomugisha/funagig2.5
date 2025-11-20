@@ -961,6 +961,20 @@ function handleApplications() {
             $sql .= " ORDER BY a.applied_at DESC";
             
             $applications = $db->fetchAll($sql, $params);
+            
+            // Add full URL to resume_path if it exists
+            foreach ($applications as &$app) {
+                if (!empty($app['resume_path'])) {
+                    // If it's not already a full URL, make it one
+                    if (!preg_match('/^https?:\/\//', $app['resume_path'])) {
+                        $app['resume_url'] = APP_URL . '/' . $app['resume_path'];
+                    } else {
+                        $app['resume_url'] = $app['resume_path'];
+                    }
+                }
+            }
+            unset($app); // Break reference
+            
             sendResponse(['success' => true, 'applications' => $applications]);
         }
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
