@@ -28,7 +28,7 @@
             </nav>
         </aside>
         <main class="content">
-            <div class="flex items-center justify-between mb-20">a
+            <div class="flex items-center justify-between mb-20">
                 <div>
                     <h1 class="h1" style="font-size:28px; margin:0;">My Gigs</h1>
                     <p class="subtle">Manage and track all your posted gigs</p>
@@ -290,7 +290,7 @@
                 
                 const sidebarTitle = document.querySelector('.sidebar .title');
                 if (sidebarTitle) {
-                    sidebarTitle.innerHTML = `<div class="cover-img" style="width:36px;height:36px;">${userInitials}</div> ${userName}`;
+                    sidebarTitle.innerHTML = `<div class="cover-img" style="width:36px;height:36px;">${escapeHtml(userInitials)}</div> ${escapeHtml(userName)}`;
                 }
                 
                 // Load gigs from API

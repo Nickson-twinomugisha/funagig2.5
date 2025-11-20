@@ -90,10 +90,20 @@ switch ($path) {
     default:
         if (strpos($path, '/messages/') === 0) {
             $conversationId = substr($path, 10);
-            handleMessagesByConversation($conversationId);
+            // Validate conversationId is numeric
+            if (!is_numeric($conversationId) || $conversationId <= 0) {
+                sendError('Invalid conversation ID', 400);
+                return;
+            }
+            handleMessagesByConversation((int)$conversationId);
         } elseif (strpos($path, '/reviews/') === 0) {
             $userId = substr($path, 9);
-            handleReviewsByUser($userId);
+            // Validate userId is numeric
+            if (!is_numeric($userId) || $userId <= 0) {
+                sendError('Invalid user ID', 400);
+                return;
+            }
+            handleReviewsByUser((int)$userId);
         } else {
             sendError('Endpoint not found', 404);
         }
@@ -403,13 +413,25 @@ function handleProfile() {
         }
         
         if (isset($input['phone'])) {
+            $phone = sanitizeInput($input['phone']);
+            // Validate phone number format (allows + prefix and 10-15 digits)
+            if (!empty($phone) && !preg_match('/^\+?[0-9]{10,15}$/', $phone)) {
+                sendError('Invalid phone number format');
+                return;
+            }
             $updateFields[] = 'phone = ?';
-            $updateValues[] = sanitizeInput($input['phone']);
+            $updateValues[] = $phone;
         }
         
         if (isset($input['website'])) {
+            $website = sanitizeInput($input['website']);
+            // Validate website URL format
+            if (!empty($website) && !filter_var($website, FILTER_VALIDATE_URL)) {
+                sendError('Invalid website URL');
+                return;
+            }
             $updateFields[] = 'website = ?';
-            $updateValues[] = sanitizeInput($input['website']);
+            $updateValues[] = $website;
         }
         
         if (isset($input['bio'])) {
@@ -862,7 +884,45 @@ function handleUpdateGig() {
         return;
     }
     
+    // Validate status enum
+    $validStatuses = ['active', 'paused', 'completed', 'cancelled'];
+    if (isset($input['status']) && !in_array($input['status'], $validStatuses)) {
+        sendError('Invalid status value');
+        return;
+    }
+    
+    // Validate type enum
+    $validTypes = ['one-time', 'ongoing', 'contract'];
+    if (isset($input['type']) && !in_array($input['type'], $validTypes)) {
+        sendError('Invalid gig type');
+        return;
+    }
+    
+    // Validate budget
+    if (isset($input['budget']) && (!is_numeric($input['budget']) || $input['budget'] < 0)) {
+        sendError('Budget must be a positive number');
+        return;
+    }
+    
+    // Validate text lengths
+    if (isset($input['title']) && strlen($input['title']) > 255) {
+        sendError('Title must be 255 characters or less');
+        return;
+    }
+    
     $db = Database::getInstance();
+    
+    // Verify gig ownership before updating
+    $gig = $db->fetchOne("SELECT user_id FROM gigs WHERE id = ?", [$gigId]);
+    if (!$gig) {
+        sendError('Gig not found', 404);
+        return;
+    }
+    if ($gig['user_id'] != $userId) {
+        sendError('Gig not found or access denied', 403);
+        return;
+    }
+    
     $affected = $db->update(
         "UPDATE gigs SET title=?, description=?, budget=?, deadline=?, status=?, type=?, skills=?, location=? 
          WHERE id=? AND user_id=?",
@@ -900,6 +960,18 @@ function handleDeleteGig() {
     $userId = $_SESSION['user_id'];
     
     $db = Database::getInstance();
+    
+    // Verify gig ownership before deleting
+    $gig = $db->fetchOne("SELECT user_id FROM gigs WHERE id = ?", [$gigId]);
+    if (!$gig) {
+        sendError('Gig not found', 404);
+        return;
+    }
+    if ($gig['user_id'] != $userId) {
+        sendError('Gig not found or access denied', 403);
+        return;
+    }
+    
     $affected = $db->delete(
         "DELETE FROM gigs WHERE id=? AND user_id=?",
         [$gigId, $userId]
@@ -914,6 +986,26 @@ function handleGetApplicants() {
     $gigId = $_GET['gig_id'] ?? null;
     
     $db = Database::getInstance();
+    
+    // Verify gig ownership when gigId is provided
+    if ($gigId) {
+        // Validate gigId is numeric
+        if (!is_numeric($gigId) || $gigId <= 0) {
+            sendError('Invalid gig ID', 400);
+            return;
+        }
+        
+        $gig = $db->fetchOne("SELECT user_id FROM gigs WHERE id = ?", [$gigId]);
+        if (!$gig) {
+            sendError('Gig not found', 404);
+            return;
+        }
+        if ($gig['user_id'] != $userId) {
+            sendError('Gig not found or access denied', 403);
+            return;
+        }
+    }
+    
     $sql = "SELECT a.*, g.title as gig_title, u.name as student_name, 
             u.university, u.major, u.skills
             FROM applications a
