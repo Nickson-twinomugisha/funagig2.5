@@ -373,6 +373,8 @@
     <script>
         // Load user data and update profile
         document.addEventListener('DOMContentLoaded', async function() {
+            // Setup real-time validation
+            setupBusinessProfileValidation();
             // Verify session and check user type
             if (!Auth.requireUserType('business')) {
                 return;
@@ -971,6 +973,50 @@
             document.getElementById('editModal').style.display = 'none';
         }
         
+        // Validation helper functions
+        function validateEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+        
+        function validatePhone(phone) {
+            if (!phone) return true; // Phone is optional
+            // Allow + prefix and 10-15 digits
+            return /^\+?[0-9]{10,15}$/.test(phone.replace(/[\s-]/g, ''));
+        }
+        
+        function validateWebsite(website) {
+            if (!website) return true; // Website is optional
+            try {
+                const url = new URL(website);
+                return url.protocol === 'http:' || url.protocol === 'https:';
+            } catch {
+                // If URL constructor fails, try adding protocol
+                try {
+                    const url = new URL('https://' + website);
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+        }
+        
+        // Setup real-time validation for edit form
+        function setupBusinessProfileValidation() {
+            const websiteInput = document.getElementById('editWebsite');
+            
+            if (websiteInput) {
+                websiteInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    if (value && !validateWebsite(value)) {
+                        this.classList.add('error');
+                        showNotification('Please enter a valid website URL (e.g., https://example.com)', 'error');
+                    } else {
+                        this.classList.remove('error');
+                    }
+                });
+            }
+        }
+        
         // Handle edit profile form submission
         document.getElementById('editProfileForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -993,6 +1039,13 @@
                 // Validate
                 if (!formData.name) {
                     showNotification('Company name is required', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
+                if (formData.website && !validateWebsite(formData.website)) {
+                    showNotification('Please enter a valid website URL (e.g., https://example.com)', 'error');
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                     return;

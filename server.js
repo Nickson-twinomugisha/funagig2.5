@@ -97,35 +97,37 @@ io.on('connection', (socket) => {
         try {
             const { userId, sessionToken } = data;
             
-            if (!userId) {
-                socket.emit('authentication_error', { message: 'User ID required' });
+            // Require both userId and sessionToken
+            if (!userId || !sessionToken) {
+                socket.emit('authentication_error', { message: 'User ID and session token required' });
                 return;
             }
 
-            // Validate session if sessionToken is provided
-            // Note: PHP uses file-based sessions by default, so we validate against the sessions table
-            // if it exists and contains session data. Otherwise, we trust the userId from the client.
-            if (sessionToken) {
-                try {
-                    // Try to validate using sessions table (if custom session management is used)
-                    const [sessionRows] = await dbPool.execute(
-                        'SELECT user_id, expires_at FROM sessions WHERE id = ? AND user_id = ? AND expires_at > NOW()',
-                        [sessionToken, userId]
-                    );
-                    
-                    if (sessionRows.length === 0) {
-                        // Session table validation failed - this is OK if using PHP file-based sessions
-                        // We'll continue with userId validation only
-                        console.log(`Session validation skipped for user ${userId} (using userId only)`);
-                    }
-                } catch (dbError) {
-                    // Sessions table might not exist or have different structure
-                    // This is fine - we'll use userId validation only
-                    console.log(`Session validation skipped: ${dbError.message}`);
+            // Validate session token against database
+            try {
+                const [sessionRows] = await dbPool.execute(
+                    'SELECT user_id, expires_at FROM sessions WHERE id = ? AND user_id = ? AND expires_at > NOW()',
+                    [sessionToken, userId]
+                );
+                
+                if (sessionRows.length === 0) {
+                    socket.emit('authentication_error', { message: 'Invalid or expired session' });
+                    return;
                 }
+                
+                // Update last activity
+                await dbPool.execute(
+                    'UPDATE sessions SET last_activity = NOW() WHERE id = ?',
+                    [sessionToken]
+                );
+            } catch (dbError) {
+                console.error('Session validation error:', dbError);
+                // If sessions table doesn't exist, we can't validate - reject connection for security
+                socket.emit('authentication_error', { message: 'Session validation failed' });
+                return;
             }
             
-            // Additional validation: Verify user exists in database
+            // Verify user exists in database
             try {
                 const [userRows] = await dbPool.execute(
                     'SELECT id FROM users WHERE id = ?',
@@ -138,7 +140,8 @@ io.on('connection', (socket) => {
                 }
             } catch (dbError) {
                 console.error('User validation error:', dbError);
-                // Continue if database query fails (shouldn't happen, but be graceful)
+                socket.emit('authentication_error', { message: 'User validation failed' });
+                return;
             }
 
             // Store user mapping

@@ -358,13 +358,32 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_type ON users(type);
 CREATE INDEX idx_gigs_user_id ON gigs(user_id);
 CREATE INDEX idx_gigs_status ON gigs(status);
+CREATE INDEX idx_gigs_created_at ON gigs(created_at);
+CREATE INDEX idx_gigs_deadline ON gigs(deadline);
+-- Composite index for common query pattern: active gigs sorted by date
+CREATE INDEX idx_gigs_status_created_at ON gigs(status, created_at);
 CREATE INDEX idx_applications_user_id ON applications(user_id);
 CREATE INDEX idx_applications_gig_id ON applications(gig_id);
 CREATE INDEX idx_applications_status ON applications(status);
+CREATE INDEX idx_applications_applied_at ON applications(applied_at);
+-- Composite index for common query pattern: applications for a gig sorted by date
+CREATE INDEX idx_applications_gig_status_applied ON applications(gig_id, status, applied_at);
 CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX idx_messages_created_at ON messages(created_at);
+-- Composite index for common query pattern: messages in conversation sorted by time
+CREATE INDEX idx_messages_conv_created ON messages(conversation_id, created_at);
+CREATE INDEX idx_messages_is_read ON messages(is_read);
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+-- Composite index for common query pattern: user notifications filtered by read status and sorted by date
+CREATE INDEX idx_notifications_user_read_created ON notifications(user_id, is_read, created_at);
+CREATE INDEX idx_conversations_created_at ON conversations(created_at);
+CREATE INDEX idx_conversations_last_message_at ON conversations(last_message_at);
+CREATE INDEX idx_saved_gigs_saved_at ON saved_gigs(saved_at);
+CREATE INDEX idx_reviews_created_at ON reviews(created_at);
+CREATE INDEX idx_password_reset_created_at ON password_reset_tokens(created_at);
 
 -- FULLTEXT index for message search (MySQL 5.6+ or MariaDB 10.0+)
 -- Note: If FULLTEXT is not supported, comment out this line

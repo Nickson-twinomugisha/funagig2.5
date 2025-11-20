@@ -215,6 +215,8 @@
     <script>
         // Load user data and update profile
         document.addEventListener('DOMContentLoaded', async function() {
+            // Setup real-time validation
+            setupProfileValidation();
             // Verify session and check user type
             if (!Auth.requireUserType('student')) {
                 return;
@@ -810,6 +812,47 @@
             }
         }
         
+        // Validation helper functions
+        function validateEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+        
+        function validatePhone(phone) {
+            if (!phone) return true; // Phone is optional
+            // Allow + prefix and 10-15 digits
+            return /^\+?[0-9]{10,15}$/.test(phone.replace(/[\s-]/g, ''));
+        }
+        
+        // Setup real-time validation for profile form
+        function setupProfileValidation() {
+            const emailInput = document.querySelector('input[name="email"]');
+            const phoneInput = document.querySelector('input[name="phone"]');
+            
+            if (emailInput) {
+                emailInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    if (value && !validateEmail(value)) {
+                        this.classList.add('error');
+                        showNotification('Please enter a valid email address', 'error');
+                    } else {
+                        this.classList.remove('error');
+                    }
+                });
+            }
+            
+            if (phoneInput) {
+                phoneInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    if (value && !validatePhone(value)) {
+                        this.classList.add('error');
+                        showNotification('Please enter a valid phone number (10-15 digits, optional + prefix)', 'error');
+                    } else {
+                        this.classList.remove('error');
+                    }
+                });
+            }
+        }
+        
         // Handle profile form submission
         document.getElementById('profile-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -832,6 +875,27 @@
                 // Validate
                 if (!formData.name) {
                     showNotification('Name is required', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
+                if (!formData.email) {
+                    showNotification('Email is required', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
+                if (!validateEmail(formData.email)) {
+                    showNotification('Please enter a valid email address', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
+                if (formData.phone && !validatePhone(formData.phone)) {
+                    showNotification('Please enter a valid phone number (10-15 digits, optional + prefix)', 'error');
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                     return;

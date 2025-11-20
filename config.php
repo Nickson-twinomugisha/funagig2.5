@@ -165,8 +165,23 @@ function sendResponse($data, $status = 200) {
     exit;
 }
 
-function sendError($message, $status = 400) {
-    sendResponse(['success' => false, 'error' => $message], $status);
+function sendError($message, $status = 400, $errorCode = null, $details = null) {
+    $response = [
+        'success' => false,
+        'error' => $message
+    ];
+    
+    // Add optional error code if provided
+    if ($errorCode !== null) {
+        $response['error_code'] = $errorCode;
+    }
+    
+    // Add optional error details if provided
+    if ($details !== null) {
+        $response['details'] = $details;
+    }
+    
+    sendResponse($response, $status);
 }
 
 // Rate limiting configuration per endpoint

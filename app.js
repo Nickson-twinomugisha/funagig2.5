@@ -1,8 +1,35 @@
 // Core JavaScript utilities for FunaGig
 // Shared utilities, API calls, localStorage management
 
-// API Configuration
-const API_BASE_URL = '/funagig/api.php';
+// API Configuration - Auto-detect from current location
+function getApiBaseUrl() {
+    // Try to auto-detect from current page location
+    const currentPath = window.location.pathname;
+    
+    // If we're in a subdirectory, try to find api.php relative to current location
+    // Common patterns:
+    // - /funagig/api.php (root level)
+    // - /funagig/some-page.html -> /funagig/api.php
+    // - /some-path/funagig/api.php -> /some-path/funagig/api.php
+    
+    // Remove filename from path
+    const pathParts = currentPath.split('/').filter(p => p);
+    const fileName = pathParts[pathParts.length - 1];
+    
+    // If last part is a file (has extension), remove it
+    if (fileName && fileName.includes('.')) {
+        pathParts.pop();
+    }
+    
+    // Reconstruct path to api.php
+    const basePath = pathParts.length > 0 ? '/' + pathParts.join('/') : '';
+    const apiPath = basePath + '/api.php';
+    
+    // Fallback to default if auto-detection fails
+    return apiPath || '/funagig/api.php';
+}
+
+const API_BASE_URL = getApiBaseUrl();
 const WEBSOCKET_URL = 'http://localhost:3001';
 
 // CSRF Token Management
@@ -1957,14 +1984,53 @@ const WebSocketClient = {
                 this.authenticate();
             });
             
-            this.socket.on('disconnect', () => {
-                console.log('WebSocket disconnected');
+            this.socket.on('disconnect', (reason) => {
+                console.log('WebSocket disconnected:', reason);
                 this.connected = false;
+                
+                // Attempt to reconnect if it was an unexpected disconnect
+                if (reason === 'io server disconnect') {
+                    // Server disconnected the socket, don't reconnect automatically
+                    console.log('Server disconnected socket. Manual reconnection may be required.');
+                } else {
+                    // Client-side disconnect or network error - attempt reconnection
+                    this.reconnectAttempts++;
+                    if (this.reconnectAttempts <= this.maxReconnectAttempts) {
+                        const delay = this.reconnectDelay * this.reconnectAttempts;
+                        console.log(`Attempting to reconnect in ${delay}ms... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                        setTimeout(() => {
+                            if (!this.connected) {
+                                this.connect();
+                            }
+                        }, delay);
+                    } else {
+                        console.error('Max reconnection attempts reached. WebSocket connection failed.');
+                        if (typeof Toast !== 'undefined') {
+                            Toast.warning('Real-time features unavailable. Please refresh the page.');
+                        }
+                    }
+                }
             });
             
             this.socket.on('connect_error', (error) => {
                 console.error('WebSocket connection error:', error);
                 this.connected = false;
+                this.reconnectAttempts++;
+                
+                if (this.reconnectAttempts <= this.maxReconnectAttempts) {
+                    const delay = this.reconnectDelay * this.reconnectAttempts;
+                    console.log(`Will retry connection in ${delay}ms... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    setTimeout(() => {
+                        if (!this.connected) {
+                            this.connect();
+                        }
+                    }, delay);
+                } else {
+                    console.error('Max reconnection attempts reached. WebSocket connection failed.');
+                    if (typeof Toast !== 'undefined') {
+                        Toast.warning('Unable to connect to real-time server. Some features may be limited.');
+                    }
+                }
             });
             
             this.socket.on('authenticated', (data) => {
@@ -1974,7 +2040,18 @@ const WebSocketClient = {
             
             this.socket.on('authentication_error', (error) => {
                 console.error('WebSocket authentication error:', error);
+                this.connected = false;
                 this.emit('authentication_error', error);
+                
+                // Disconnect and don't attempt to reconnect if authentication fails
+                if (this.socket) {
+                    this.socket.disconnect();
+                }
+                
+                // Show user-friendly error message
+                if (typeof Toast !== 'undefined') {
+                    Toast.error('WebSocket authentication failed. Please refresh the page.');
+                }
             });
             
             // Message events
@@ -2020,6 +2097,19 @@ const WebSocketClient = {
         }
     },
     
+    // Get PHP session ID from cookie
+    getSessionId() {
+        // PHP session cookie is typically named PHPSESSID
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'PHPSESSID') {
+                return value;
+            }
+        }
+        return null;
+    },
+    
     // Authenticate with WebSocket server
     authenticate() {
         if (!this.socket || !this.connected) {
@@ -2028,14 +2118,22 @@ const WebSocketClient = {
         
         const user = Auth.getUser();
         if (!user || !user.id) {
+            console.warn('Cannot authenticate WebSocket: User not logged in');
             return;
         }
         
-        // For now, we'll use userId directly
-        // In production, you should verify the session server-side
+        // Get PHP session ID from cookie
+        const sessionToken = this.getSessionId();
+        if (!sessionToken) {
+            console.error('Cannot authenticate WebSocket: Session ID not found');
+            this.socket.emit('authentication_error', { message: 'Session ID not found' });
+            return;
+        }
+        
+        // Send authentication with session token
         this.socket.emit('authenticate', {
             userId: user.id,
-            sessionToken: 'session_token_here' // Should get from PHP session
+            sessionToken: sessionToken
         });
     },
     

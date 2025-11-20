@@ -160,6 +160,31 @@ function handleLogin() {
         // Generate a new CSRF token for the new session
         generateCSRFToken();
         
+        // Store session in database for WebSocket validation
+        $sessionId = session_id();
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+24 hours')); // Session expires in 24 hours
+        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+        
+        // Invalidate any existing sessions for this user
+        $db->update(
+            "UPDATE sessions SET expires_at = NOW() WHERE user_id = ? AND expires_at > NOW()",
+            [$user['id']]
+        );
+        
+        // Insert new session
+        try {
+            $db->insert(
+                "INSERT INTO sessions (id, user_id, ip_address, user_agent, expires_at) 
+                 VALUES (?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE user_id = ?, ip_address = ?, user_agent = ?, expires_at = ?, last_activity = NOW()",
+                [$sessionId, $user['id'], $ipAddress, $userAgent, $expiresAt, $user['id'], $ipAddress, $userAgent, $expiresAt]
+            );
+        } catch (Exception $e) {
+            // If sessions table doesn't exist or has issues, log but don't fail login
+            error_log("Failed to store session in database: " . $e->getMessage());
+        }
+        
         sendResponse([
             'success' => true,
             'user' => $user,
@@ -277,8 +302,26 @@ function handleSignup() {
 }
 
 function handleLogout() {
+    $userId = $_SESSION['user_id'] ?? null;
+    $sessionId = session_id();
+    
+    // Invalidate session in database before destroying PHP session
+    if ($sessionId && $userId) {
+        try {
+            $db = Database::getInstance();
+            $db->update(
+                "UPDATE sessions SET expires_at = NOW() WHERE id = ? AND user_id = ?",
+                [$sessionId, $userId]
+            );
+        } catch (Exception $e) {
+            error_log("Failed to invalidate session in database: " . $e->getMessage());
+        }
+    }
+    
+    // Destroy PHP session
     session_destroy();
-    sendResponse(['success' => true]);
+    
+    sendResponse(['success' => true, 'message' => 'Logged out successfully']);
 }
 
 // Dashboard handler
@@ -476,14 +519,43 @@ function handleGigs() {
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $db = Database::getInstance();
+        
+        // Pagination parameters
+        $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+        $limit = isset($_GET['limit']) ? max(1, min(100, intval($_GET['limit']))) : 20; // Default 20, max 100
+        $offset = ($page - 1) * $limit;
+        
+        // Get total count for pagination metadata
+        $totalCount = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM gigs g 
+             JOIN users u ON g.user_id = u.id 
+             WHERE g.status = 'active'"
+        )['count'];
+        
+        // Fetch paginated gigs
         $gigs = $db->fetchAll(
             "SELECT g.*, u.name as business_name FROM gigs g 
              JOIN users u ON g.user_id = u.id 
              WHERE g.status = 'active' 
-             ORDER BY g.created_at DESC"
+             ORDER BY g.created_at DESC
+             LIMIT ? OFFSET ?",
+            [$limit, $offset]
         );
         
-        sendResponse(['success' => true, 'gigs' => $gigs]);
+        $totalPages = ceil($totalCount / $limit);
+        
+        sendResponse([
+            'success' => true,
+            'gigs' => $gigs,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $totalPages,
+                'has_next' => $page < $totalPages,
+                'has_prev' => $page > 1
+            ]
+        ]);
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $input = json_decode(file_get_contents('php://input'), true);
@@ -705,6 +777,19 @@ function handleConversations() {
     $db = Database::getInstance();
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Pagination parameters
+        $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+        $limit = isset($_GET['limit']) ? max(1, min(100, intval($_GET['limit']))) : 20; // Default 20, max 100
+        $offset = ($page - 1) * $limit;
+        
+        // Get total count for pagination metadata
+        $totalCount = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM conversations c
+             WHERE c.user1_id = ? OR c.user2_id = ?",
+            [$userId, $userId]
+        )['count'];
+        
+        // Fetch paginated conversations
         $conversations = $db->fetchAll(
             "SELECT c.*, 
              CASE 
@@ -734,11 +819,25 @@ function handleConversations() {
              JOIN users u1 ON c.user1_id = u1.id
              JOIN users u2 ON c.user2_id = u2.id
              WHERE c.user1_id = ? OR c.user2_id = ?
-             ORDER BY COALESCE(last_message_time, c.created_at) DESC, c.created_at DESC",
-            [$userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId]
+             ORDER BY COALESCE((SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1), c.created_at) DESC, c.created_at DESC
+             LIMIT ? OFFSET ?",
+            [$userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $limit, $offset]
         );
         
-        sendResponse(['success' => true, 'conversations' => $conversations]);
+        $totalPages = ceil($totalCount / $limit);
+        
+        sendResponse([
+            'success' => true,
+            'conversations' => $conversations,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $totalPages,
+                'has_next' => $page < $totalPages,
+                'has_prev' => $page > 1
+            ]
+        ]);
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true);
         
@@ -1198,15 +1297,29 @@ function handleNotifications() {
         // Get all notifications for user
         $isRead = $_GET['is_read'] ?? null;
         
-        $sql = "SELECT * FROM notifications WHERE user_id = ?";
-        $params = [$userId];
+        // Pagination parameters
+        $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+        $limit = isset($_GET['limit']) ? max(1, min(100, intval($_GET['limit']))) : 20; // Default 20, max 100
+        $offset = ($page - 1) * $limit;
+        
+        // Build base SQL for counting and fetching
+        $baseSql = "SELECT * FROM notifications WHERE user_id = ?";
+        $baseParams = [$userId];
         
         if ($isRead !== null) {
-            $sql .= " AND is_read = ?";
-            $params[] = $isRead === 'true' ? 1 : 0;
+            $baseSql .= " AND is_read = ?";
+            $baseParams[] = $isRead === 'true' ? 1 : 0;
         }
         
-        $sql .= " ORDER BY created_at DESC LIMIT 50";
+        // Get total count for pagination metadata
+        $totalCount = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM notifications WHERE user_id = ?" . ($isRead !== null ? " AND is_read = ?" : ""),
+            $baseParams
+        )['count'];
+        
+        // Fetch paginated notifications
+        $sql = $baseSql . " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        $params = array_merge($baseParams, [$limit, $offset]);
         
         $notifications = $db->fetchAll($sql, $params);
         
@@ -1216,10 +1329,20 @@ function handleNotifications() {
             [$userId]
         )['count'];
         
+        $totalPages = ceil($totalCount / $limit);
+        
         sendResponse([
             'success' => true,
             'notifications' => $notifications,
-            'unread_count' => $unreadCount
+            'unread_count' => $unreadCount,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $totalPages,
+                'has_next' => $page < $totalPages,
+                'has_prev' => $page > 1
+            ]
         ]);
     } elseif ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         // Mark notification(s) as read
