@@ -51,7 +51,7 @@ CREATE TABLE gigs (
     skills TEXT NULL,
     location VARCHAR(255) NULL,
     type ENUM('one-time', 'ongoing', 'contract') DEFAULT 'one-time',
-    status ENUM('active', 'paused', 'completed', 'cancelled') DEFAULT 'active',
+    status ENUM('draft', 'active', 'paused', 'completed', 'cancelled') DEFAULT 'draft',
     view_count INT DEFAULT 0,
     application_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -475,5 +475,16 @@ INSERT INTO gigs (user_id, title, description, budget, deadline, skills, locatio
 --    - uploads/gigs (for gig attachments)
 -- 5. Default password for all sample users: 'password'
 -- 6. All timestamps are in UTC - adjust in application if needed
+--
+-- =====================================================
+-- MIGRATION NOTES FOR EXISTING DATABASES
+-- =====================================================
+--
+-- If you have an existing database, run this migration to add 'draft' status:
+-- ALTER TABLE gigs MODIFY status ENUM('draft', 'active', 'paused', 'completed', 'cancelled') DEFAULT 'draft';
+--
+-- Note: This migration is safe - it only adds a new option to the ENUM.
+-- Existing records with 'active', 'paused', 'completed', or 'cancelled' status will remain unchanged.
+-- New gigs will default to 'draft' status.
 --
 -- =====================================================

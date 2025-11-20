@@ -88,6 +88,9 @@ switch ($path) {
     case '/typing':
         handleTyping();
         break;
+    case '/contact':
+        handleContact();
+        break;
     default:
         if (strpos($path, '/messages/') === 0) {
             $conversationId = substr($path, 10);
@@ -105,6 +108,32 @@ switch ($path) {
                 return;
             }
             handleReviewsByUser((int)$userId);
+        } elseif (preg_match('#^/gigs/(\d+)/interest$#', $path, $matches)) {
+            // Handle /gigs/{id}/interest - interest tracking (RESTful format)
+            $gigId = (int)$matches[1];
+            if ($gigId <= 0) {
+                sendError('Invalid gig ID', 400);
+                return;
+            }
+            handleGigInterest($gigId);
+        } elseif (strpos($path, '/gigs/') === 0 && strpos($path, '/gigs/active') === false && strpos($path, '/gigs/update') === false && strpos($path, '/gigs/delete') === false && strpos($path, '/interest') === false) {
+            // Handle /gigs/{id} - single gig view
+            $gigId = substr($path, 6);
+            // Validate gigId is numeric
+            if (!is_numeric($gigId) || $gigId <= 0) {
+                sendError('Invalid gig ID', 400);
+                return;
+            }
+            handleGetGig((int)$gigId);
+        } elseif (strpos($path, '/users/') === 0) {
+            // Handle /users/{id} - public profile view
+            $userId = substr($path, 7);
+            // Validate userId is numeric
+            if (!is_numeric($userId) || $userId <= 0) {
+                sendError('Invalid user ID', 400);
+                return;
+            }
+            handlePublicProfile((int)$userId);
         } else {
             sendError('Endpoint not found', 404);
         }
@@ -579,24 +608,47 @@ function handleGigs() {
                 sendError('Budget must be a positive number');
             }
             
-            // Validate deadline is in the future
-            if (strtotime($input['deadline']) <= time()) {
-                sendError('Deadline must be in the future');
+            // Get and validate status
+            $status = sanitizeInput($input['status'] ?? 'active');
+            $validStatuses = ['draft', 'active', 'paused', 'completed', 'cancelled'];
+            if (!in_array($status, $validStatuses)) {
+                sendError('Invalid status. Must be one of: ' . implode(', ', $validStatuses));
+            }
+            
+            // Handle deadline validation based on status
+            $deadline = $input['deadline'] ?? null;
+            
+            if ($status === 'draft') {
+                // For drafts, deadline is optional - set default if not provided
+                if (empty($deadline)) {
+                    // Set a default future date for drafts (can be updated later)
+                    $deadline = date('Y-m-d', strtotime('+30 days'));
+                }
+                // For drafts, accept any deadline (even past dates) - can be fixed when publishing
+            } else {
+                // For non-draft statuses, deadline is required and must be in the future
+                if (empty($deadline)) {
+                    sendError('Deadline is required');
+                }
+                if (strtotime($deadline) <= time()) {
+                    sendError('Deadline must be in the future');
+                }
             }
             
             $db = Database::getInstance();
             $gigId = $db->insert(
                 "INSERT INTO gigs (user_id, title, description, budget, deadline, skills, location, type, status, created_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW())",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
                 [
                     $userId,
                     sanitizeInput($input['title'] ?? ''),
                     sanitizeInput($input['description'] ?? ''),
                     $input['budget'] ?? 0,
-                    $input['deadline'] ?? '',
+                    $deadline,
                     sanitizeInput($input['skills'] ?? ''),
                     sanitizeInput($input['location'] ?? ''),
-                    sanitizeInput($input['type'] ?? '')
+                    sanitizeInput($input['type'] ?? ''),
+                    $status
                 ]
             );
             
@@ -619,17 +671,37 @@ function handleActiveGigs() {
     $user = getCurrentUser();
     $db = Database::getInstance();
     
+    // Optional parameter to include drafts (only for businesses viewing their own gigs)
+    $includeDrafts = isset($_GET['include_drafts']) && $_GET['include_drafts'] === 'true';
+    
     if ($user['type'] === 'business') {
-        $gigs = $db->fetchAll(
-            "SELECT g.*, 
-             (SELECT COUNT(*) FROM applications WHERE gig_id = g.id) as applicant_count,
-             (SELECT COUNT(*) FROM applications WHERE gig_id = g.id AND status = 'accepted') as hired_count
-             FROM gigs g 
-             WHERE g.user_id = ? AND g.status = 'active' 
-             ORDER BY g.created_at DESC",
-            [$user['id']]
-        );
+        // For businesses, show their own gigs
+        // By default, exclude drafts unless include_drafts=true
+        if ($includeDrafts) {
+            // Include both active and draft gigs
+            $gigs = $db->fetchAll(
+                "SELECT g.*, 
+                 (SELECT COUNT(*) FROM applications WHERE gig_id = g.id) as applicant_count,
+                 (SELECT COUNT(*) FROM applications WHERE gig_id = g.id AND status = 'accepted') as hired_count
+                 FROM gigs g 
+                 WHERE g.user_id = ? AND (g.status = 'active' OR g.status = 'draft')
+                 ORDER BY g.status ASC, g.created_at DESC",
+                [$user['id']]
+            );
+        } else {
+            // Default: only active gigs (backward compatible)
+            $gigs = $db->fetchAll(
+                "SELECT g.*, 
+                 (SELECT COUNT(*) FROM applications WHERE gig_id = g.id) as applicant_count,
+                 (SELECT COUNT(*) FROM applications WHERE gig_id = g.id AND status = 'accepted') as hired_count
+                 FROM gigs g 
+                 WHERE g.user_id = ? AND g.status = 'active' 
+                 ORDER BY g.created_at DESC",
+                [$user['id']]
+            );
+        }
     } else {
+        // For students, always show only active gigs (never show drafts)
         $gigs = $db->fetchAll(
             "SELECT g.*, u.name as business_name FROM gigs g 
              JOIN users u ON g.user_id = u.id 
@@ -2317,6 +2389,299 @@ function handleTyping() {
                 'is_typing' => false
             ]);
         }
+    } else {
+        sendError('Method not allowed', 405);
+    }
+}
+
+// Get single gig by ID
+function handleGetGig($gigId) {
+    // Allow public access (no auth required) for viewing gigs
+    $db = Database::getInstance();
+    
+    // Fetch gig with business information
+    $gig = $db->fetchOne(
+        "SELECT g.*, u.name as business_name, u.industry, u.location as business_location, u.rating as business_rating
+         FROM gigs g 
+         JOIN users u ON g.user_id = u.id 
+         WHERE g.id = ? AND g.status = 'active'",
+        [$gigId]
+    );
+    
+    if (!$gig) {
+        sendError('Gig not found', 404);
+        return;
+    }
+    
+    // Get application count
+    $applicationCount = $db->fetchOne(
+        "SELECT COUNT(*) as count FROM applications WHERE gig_id = ?",
+        [$gigId]
+    )['count'];
+    
+    // Get interest count
+    $interestCount = $db->fetchOne(
+        "SELECT COUNT(*) as count FROM interested_gigs WHERE gig_id = ?",
+        [$gigId]
+    )['count'];
+    
+    // Check if current user (if logged in) has applied or shown interest
+    $userApplied = false;
+    $userInterested = false;
+    
+    if (isset($_SESSION['user_id'])) {
+        $userId = $_SESSION['user_id'];
+        
+        // Check if user has applied
+        $application = $db->fetchOne(
+            "SELECT id FROM applications WHERE gig_id = ? AND user_id = ?",
+            [$gigId, $userId]
+        );
+        $userApplied = $application ? true : false;
+        
+        // Check if user has shown interest
+        $interest = $db->fetchOne(
+            "SELECT id FROM interested_gigs WHERE gig_id = ? AND user_id = ?",
+            [$gigId, $userId]
+        );
+        $userInterested = $interest ? true : false;
+    }
+    
+    // Increment view count (optional - can be rate limited)
+    $db->update(
+        "UPDATE gigs SET view_count = view_count + 1 WHERE id = ?",
+        [$gigId]
+    );
+    
+    sendResponse([
+        'success' => true,
+        'gig' => $gig,
+        'application_count' => (int)$applicationCount,
+        'interest_count' => (int)$interestCount,
+        'user_applied' => $userApplied,
+        'user_interested' => $userInterested
+    ]);
+}
+
+// Get public user profile
+function handlePublicProfile($userId) {
+    // Allow public access but with limited information
+    $db = Database::getInstance();
+    
+    // Fetch public profile information (exclude sensitive data)
+    $user = $db->fetchOne(
+        "SELECT id, name, type, university, major, industry, bio, skills, location, 
+                profile_image, rating, total_ratings, is_verified, created_at
+         FROM users 
+         WHERE id = ? AND is_active = TRUE",
+        [$userId]
+    );
+    
+    if (!$user) {
+        sendError('User not found', 404);
+        return;
+    }
+    
+    // Get user's portfolio files (if any)
+    $portfolio = $db->fetchAll(
+        "SELECT id, file_name, file_type, file_category, description, created_at
+         FROM user_files 
+         WHERE user_id = ? AND file_category = 'portfolio'
+         ORDER BY created_at DESC
+         LIMIT 10",
+        [$userId]
+    );
+    
+    // Get user's reviews (public reviews only)
+    $reviews = $db->fetchAll(
+        "SELECT r.*, u.name as reviewer_name, u.profile_image as reviewer_image
+         FROM reviews r
+         JOIN users u ON r.reviewer_id = u.id
+         WHERE r.reviewee_id = ?
+         ORDER BY r.created_at DESC
+         LIMIT 10",
+        [$userId]
+    );
+    
+    // Get user's completed gigs count (if student) or active gigs count (if business)
+    if ($user['type'] === 'student') {
+        $completedGigs = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status = 'completed'",
+            [$userId]
+        )['count'];
+        $user['completed_gigs_count'] = (int)$completedGigs;
+    } else {
+        $activeGigs = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM gigs WHERE user_id = ? AND status = 'active'",
+            [$userId]
+        )['count'];
+        $user['active_gigs_count'] = (int)$activeGigs;
+    }
+    
+    sendResponse([
+        'success' => true,
+        'user' => $user,
+        'portfolio' => $portfolio,
+        'reviews' => $reviews
+    ]);
+}
+
+// Contact form handler
+function handleContact() {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        sendError('Method not allowed', 405);
+    }
+    
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            sendError('Invalid JSON data');
+        }
+        
+        // Validate required fields
+        $name = sanitizeInput($input['name'] ?? '');
+        $email = sanitizeInput($input['email'] ?? '');
+        $subject = sanitizeInput($input['subject'] ?? 'General Inquiry');
+        $message = sanitizeInput($input['message'] ?? '');
+        
+        if (empty($name) || empty($email) || empty($message)) {
+            sendError('Name, email, and message are required');
+        }
+        
+        // Validate email format
+        if (!validateEmail($email)) {
+            sendError('Invalid email format');
+        }
+        
+        // Optional: Store in database (create contact_messages table if needed)
+        // For now, we'll just send email
+        
+        // Send email using the notification email function
+        $emailSubject = "Contact Form: " . $subject;
+        $emailMessage = "
+        <h2>New Contact Form Submission</h2>
+        <p><strong>Name:</strong> " . htmlspecialchars($name) . "</p>
+        <p><strong>Email:</strong> " . htmlspecialchars($email) . "</p>
+        <p><strong>Subject:</strong> " . htmlspecialchars($subject) . "</p>
+        <p><strong>Message:</strong></p>
+        <p>" . nl2br(htmlspecialchars($message)) . "</p>
+        ";
+        
+        // Get admin email from config (or use FROM_EMAIL)
+        $adminEmail = defined('FROM_EMAIL') ? FROM_EMAIL : 'admin@funagig.com';
+        
+        $emailSent = sendNotificationEmail($adminEmail, 'Admin', $emailSubject, $emailMessage);
+        
+        if ($emailSent) {
+            sendResponse([
+                'success' => true,
+                'message' => 'Thank you for contacting us. We will get back to you soon.'
+            ]);
+        } else {
+            // Even if email fails, return success (don't expose email issues to user)
+            // Log the error for admin review
+            error_log("Failed to send contact form email from: " . $email);
+            sendResponse([
+                'success' => true,
+                'message' => 'Thank you for contacting us. We will get back to you soon.'
+            ]);
+        }
+        
+    } catch (Exception $e) {
+        error_log("Contact form error: " . $e->getMessage());
+        sendError('An error occurred while processing your message. Please try again.');
+    }
+}
+
+// Gig interest tracking handler
+function handleGigInterest($gigId) {
+    requireAuth();
+    
+    $userId = $_SESSION['user_id'];
+    $db = Database::getInstance();
+    
+    // Verify gig exists and is active
+    $gig = $db->fetchOne(
+        "SELECT id, status FROM gigs WHERE id = ?",
+        [$gigId]
+    );
+    
+    if (!$gig) {
+        sendError('Gig not found', 404);
+        return;
+    }
+    
+    if ($gig['status'] !== 'active') {
+        sendError('Cannot show interest in inactive gig', 400);
+        return;
+    }
+    
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // Add interest
+        requireCSRF();
+        
+        // Check if already interested
+        $existing = $db->fetchOne(
+            "SELECT id FROM interested_gigs WHERE gig_id = ? AND user_id = ?",
+            [$gigId, $userId]
+        );
+        
+        if ($existing) {
+            sendResponse([
+                'success' => true,
+                'message' => 'You have already shown interest in this gig',
+                'interested' => true
+            ]);
+            return;
+        }
+        
+        // Add interest
+        try {
+            $db->insert(
+                "INSERT INTO interested_gigs (user_id, gig_id, interested_at) VALUES (?, ?, NOW())",
+                [$userId, $gigId]
+            );
+            
+            // Get updated interest count
+            $interestCount = $db->fetchOne(
+                "SELECT COUNT(*) as count FROM interested_gigs WHERE gig_id = ?",
+                [$gigId]
+            )['count'];
+            
+            sendResponse([
+                'success' => true,
+                'message' => 'Interest recorded',
+                'interested' => true,
+                'interest_count' => (int)$interestCount
+            ]);
+        } catch (Exception $e) {
+            error_log("Interest tracking error: " . $e->getMessage());
+            sendError('Failed to record interest. Please try again.');
+        }
+        
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+        // Remove interest
+        requireCSRF();
+        
+        $affected = $db->delete(
+            "DELETE FROM interested_gigs WHERE gig_id = ? AND user_id = ?",
+            [$gigId, $userId]
+        );
+        
+        // Get updated interest count
+        $interestCount = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM interested_gigs WHERE gig_id = ?",
+            [$gigId]
+        )['count'];
+        
+        sendResponse([
+            'success' => $affected > 0,
+            'message' => $affected > 0 ? 'Interest removed' : 'No interest found',
+            'interested' => false,
+            'interest_count' => (int)$interestCount
+        ]);
+        
     } else {
         sendError('Method not allowed', 405);
     }

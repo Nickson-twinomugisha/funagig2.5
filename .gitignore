@@ -1,5 +1,6 @@
-# Local configuration file (contains sensitive data like passwords, secrets)
+# Local configuration files (contains sensitive data like passwords, secrets)
 config.local.php
+server.config.js
 
 # Uploads directory (user-uploaded files)
 uploads/
