@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Browse Gigs - FunaGig</title>
+    <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+    <header class="navbar">
+        <div class="brand">
+            <div class="logo"></div> FunaGig
+        </div>
+        <nav class="nav-actions">
+            <a class="btn ghost" href="index.html">Home</a>
+            <a class="btn ghost" href="index.html#contact">Contact</a>
+            <a class="btn" href="signup.html">Get Started</a>
+        </nav>
+    </header>
+
+    <main class="container" style="display:grid; grid-template-columns: 260px 1fr; gap:20px;">
+        <aside class="section">
+            <h3>Filters</h3>
+            <div class="field"><label>Skill</label><select><option>Any</option></select></div>
+            <div class="field"><label>Compensation</label><select><option>Any</option></select></div>
+            <div class="field"><label>Deadline</label><input placeholder="mm/dd/yyyy" /></div>
+            <div class="field"><label>Location</label><select><option>Any</option><option>On-Campus</option><option>Remote</option></select></div>
+            <div class="field"><label>Type</label><select><option>Any</option><option>One-time</option></select></div>
+            <button class="btn" style="width:100%;" onclick="window.location.href='auth.html'">Apply</button>
+        </aside>
+
+        <section>
+            <div class="flex items-center justify-between">
+                <h1 style="font-size:28px;">Find Your Next Gig</h1>
+                <input style="max-width:280px;" placeholder="Search" />
+            </div>
+            <!-- Gig listings (optimized with CTA) -->
+            <article class="section" style="display:grid; grid-template-columns:160px 1fr auto; gap:16px; align-items:center; margin-top:20px;">
+                <div style="height:120px; background:#dbeafe; border-radius:12px;"></div>
+                <div>
+                    <div class="subtle">Deadline: 2024-08-15</div>
+                    <h3>Social Media Management</h3>
+                    <p class="subtle">Manage social media for event.</p>
+                    <span class="pill blue">Social Media</span> <span class="pill blue">On-Campus</span>
+                </div>
+                <div style="display:grid; gap:10px;">
+                    <button class="btn secondary" onclick="window.location.href='auth.html'">Save</button>
+                    <button class="btn" onclick="window.location.href='auth.html'">Interest</button>
+                </div>
+            </article>
+            <!-- Repeat for other gigs... -->
+            <div class="text-right subtle mt-20">1 2 3 … 10 »</div>
+            <div class="section text-center mt-20"><p>Not finding what you want? <a href="index.html#get-started">Sign Up</a> for personalized matches.</p></div>
+        </section>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

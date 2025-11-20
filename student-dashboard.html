@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Student Dashboard - FunaGig</title>
+    <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+    <header class="navbar">
+        <div class="brand">
+            <div class="logo"></div> FunaGig
+        </div>
+        <div class="navbar-actions">
+            <div class="notification-badge-container" id="notificationBadge" style="display: none;">
+                <span class="notification-badge" id="notificationCount">0</span>
+            </div>
+        </div>
+    </header>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="title" style="display:flex; align-items:center; gap:10px;">
+                <div class="cover-img" style="width:36px;height:36px;">AP</div> Amanya Peter
+            </div>
+            <nav class="navlist">
+                <a class="navitem active" href="student-dashboard.html">Dashboard</a>
+                <a class="navitem" href="student-gigs.html">Gigs</a>
+                <a class="navitem" href="student-messaging.html">Messages</a>
+                <a class="navitem" href="student-profile.html">Profile</a>
+                <a class="navitem" href="#" onclick="Auth.logout(); return false;">Log out</a>
+            </nav>
+        </aside>
+        <main class="content">
+            <h1 class="h1">Welcome, Amanya Peter</h1>
+
+            <!-- Quick Stats -->
+            <div class="grid-4">
+                <div class="section"><div style="font-size:32px; color:var(--primary);">3</div><p>Active Tasks</p></div>
+                <div class="section"><div style="font-size:32px; color:var(--warning);">2</div><p>Pending Tasks</p></div>
+                <div class="section"><div style="font-size:32px; color:var(--success);">5</div><p>Completed Tasks</p></div>
+                <div class="section"><div style="font-size:32px; color:var(--info);">4.6</div><p>Average Rating</p></div>
+            </div>
+            <div class="grid-4 mt-20">
+                <div class="section"><div style="font-size:24px; color:var(--success);">sh.2,100,000</div><p>Total Earned</p></div>
+                <div class="section"><div style="font-size:24px; color:var(--primary);">10</div><p>Total Tasks</p></div>
+                <div class="section"><div style="font-size:24px; color:var(--warning);">45</div><p>Days Active</p></div>
+                <div class="section"><a class="btn" href="student-gigs.html#browse">Browse Gigs</a></div>
+            </div>
+
+            <!-- Recent Applications Summary -->
+            <div class="section mt-20">
+                <h2 class="h2">Recent Applications</h2>
+                <table class="table">
+                    <thead><tr><th>Gig</th><th>Status</th><th>Date</th></tr></thead>
+                    <tbody>
+                        <tr><td>Web Dev</td><td><span class="pill yellow">Pending</span></td><td>2024-09-15</td></tr>
+                        <tr><td>Graphic Design</td><td><span class="pill green">Accepted</span></td><td>2024-09-10</td></tr>
+                    </tbody>
+                </table>
+                <a href="student-gigs.html#applications" class="btn secondary mt-10">View All Applications</a>
+            </div>
+
+            <!-- Recent Activity & Notifications -->
+            <div class="grid-2 mt-20">
+                <div class="section">
+                    <h2 class="h2">Recent Activity</h2>
+                    <ul id="recentActivity"><li>Saved gig: Social Media</li><li>Applied to: Tutoring</li></ul>
+                </div>
+                <div class="section">
+                    <div class="flex items-center justify-between mb-10">
+                        <h2 class="h2">Notifications</h2>
+                        <button class="btn secondary" onclick="markAllNotificationsRead()" id="markAllReadBtn" style="display: none; font-size: 12px; padding: 6px 12px;">Mark All Read</button>
+                    </div>
+                    <ul id="notifications"><li>New message from Employer</li><li>Application accepted</li></ul>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section mt-20">
+                <h2 class="h2">Quick Actions</h2>
+                <div class="grid-4">
+                    <a class="btn" href="student-gigs.html#browse">Apply to Gigs</a>
+                    <a class="btn secondary" href="student-gigs.html#saved">View Saved</a>
+                    <a class="btn" href="student-messaging.html">Check Messages</a>
+                    <a class="btn secondary" href="student-profile.html">Edit Profile</a>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="js/app.js"></script>
+    <script>
+        // Load user data and update dashboard
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Verify session and check user type
+            if (!Auth.requireUserType('student')) {
+                return;
+            }
+            
+            // Verify session is still valid
+            const user = await Auth.verifySession();
+            if (!user) {
+                return; // verifySession already handles logout/redirect
+            }
+            
+            if (user) {
+                // Update user name in sidebar and welcome message
+                const userName = user.name;
+                const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase();
+                
+                // Update sidebar
+                const sidebarTitle = document.querySelector('.sidebar .title');
+                if (sidebarTitle) {
+                    sidebarTitle.innerHTML = `<div class="cover-img" style="width:36px;height:36px;">${userInitials}</div> ${userName}`;
+                }
+                
+                // Update welcome message
+                const welcomeMessage = document.querySelector('.content h1');
+                if (welcomeMessage) {
+                    welcomeMessage.textContent = `Welcome, ${userName}`;
+                }
+                
+                // Load dashboard data
+                loadDashboardData();
+                
+                // Load notifications
+                loadNotifications();
+                
+                // Refresh notifications every 30 seconds
+                setInterval(() => {
+                    loadNotifications();
+                }, 30000);
+            }
+        });
+        
+        async function loadDashboardData() {
+            try {
+                const response = await apiFetch('/dashboard');
+                if (response.success) {
+                    updateDashboardStats(response.stats);
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                showNotification('Failed to load dashboard data', 'error');
+            }
+        }
+        
+        // Load notifications
+        async function loadNotifications() {
+            try {
+                const response = await apiFetch('/notifications');
+                if (response.success && response.notifications) {
+                    updateNotificationsList(response.notifications);
+                    updateNotificationCount(response.unread_count || 0);
+                }
+            } catch (error) {
+                console.error('Failed to load notifications:', error);
+                // Don't show error - keep static data
+            }
+        }
+        
+        // Update notification count in navbar
+        function updateNotificationCount(count) {
+            const badgeContainer = document.getElementById('notificationBadge');
+            const badgeCount = document.getElementById('notificationCount');
+            
+            if (badgeContainer && badgeCount) {
+                if (count > 0) {
+                    badgeContainer.style.display = 'block';
+                    badgeCount.textContent = count > 99 ? '99+' : count;
+                } else {
+                    badgeContainer.style.display = 'none';
+                }
+            }
+        }
+        
+        // Update notifications list
+        function updateNotificationsList(notifications) {
+            const notificationsContainer = document.getElementById('notifications');
+            const markAllBtn = document.getElementById('markAllReadBtn');
+            if (!notificationsContainer) return;
+            
+            if (!notifications || notifications.length === 0) {
+                notificationsContainer.innerHTML = '<li class="subtle" style="padding: 10px;">No notifications</li>';
+                if (markAllBtn) markAllBtn.style.display = 'none';
+                return;
+            }
+            
+            // Show/hide mark all button based on unread count
+            const unreadCount = notifications.filter(n => !n.is_read).length;
+            if (markAllBtn) {
+                markAllBtn.style.display = unreadCount > 0 ? 'block' : 'none';
+            }
+            
+            notificationsContainer.innerHTML = notifications.slice(0, 5).map(notif => {
+                const icons = {
+                    'info': '🔔',
+                    'success': '✅',
+                    'warning': '⚠️',
+                    'error': '❌'
+                };
+                const icon = icons[notif.type] || '🔔';
+                const timeAgo = formatTimeAgo(notif.created_at);
+                const unreadStyle = notif.is_read ? '' : 'font-weight: 600; background: rgba(18, 150, 234, 0.05);';
+                
+                return `
+                    <li onclick="markNotificationRead(${notif.id})" style="cursor: pointer; padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; border-bottom: 1px solid var(--border); ${unreadStyle}">
+                        ${icon} ${escapeHtml(notif.title)} - ${escapeHtml(notif.message)}
+                        <div class="subtle" style="font-size: 11px; margin-top: 4px;">${timeAgo}</div>
+                    </li>
+                `;
+            }).join('');
+        }
+        
+        // Mark notification as read
+        async function markNotificationRead(notificationId) {
+            try {
+                await apiFetch('/notifications', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        notification_id: notificationId
+                    })
+                });
+                
+                // Reload notifications
+                await loadNotifications();
+                
+                // Update badge
+                if (typeof NotificationBadge !== 'undefined') {
+                    NotificationBadge.loadCount();
+                }
+            } catch (error) {
+                console.error('Failed to mark notification as read:', error);
+            }
+        }
+        
+        // Mark all notifications as read
+        async function markAllNotificationsRead() {
+            try {
+                const response = await apiFetch('/notifications', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        mark_all: true
+                    })
+                });
+                
+                if (response.success) {
+                    showNotification('All notifications marked as read', 'success');
+                    await loadNotifications();
+                    // Update badge
+                    if (typeof NotificationBadge !== 'undefined') {
+                        NotificationBadge.loadCount();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to mark all as read:', error);
+                showNotification('Failed to mark all as read', 'error');
+            }
+        }
+        
+        // Format time ago
+        function formatTimeAgo(dateString) {
+            if (!dateString) return 'Unknown';
+            try {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return `${diffMins}m ago`;
+                if (diffHours < 24) return `${diffHours}h ago`;
+                if (diffDays < 7) return `${diffDays}d ago`;
+                
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            } catch (e) {
+                return 'Unknown';
+            }
+        }
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function updateDashboardStats(stats) {
+            if (!stats) return;
+            
+            // Update stats in the first grid (Active, Pending, Completed)
+            const grid4 = document.querySelector('.grid-4');
+            if (grid4) {
+                const sections = grid4.querySelectorAll('.section');
+                if (sections.length >= 3) {
+                    const activeDiv = sections[0].querySelector('div');
+                    const pendingDiv = sections[1].querySelector('div');
+                    const completedDiv = sections[2].querySelector('div');
+                    
+                    if (activeDiv) activeDiv.textContent = stats.active_tasks || 0;
+                    if (pendingDiv) pendingDiv.textContent = stats.pending_tasks || 0;
+                    if (completedDiv) completedDiv.textContent = stats.completed_tasks || 0;
+                }
+            }
+            
+            // Update total earned in second grid
+            const secondGrid = document.querySelector('.grid-4.mt-20');
+            if (secondGrid) {
+                const totalEarnedDiv = secondGrid.querySelector('.section:first-child div');
+                if (totalEarnedDiv && stats.total_earned) {
+                    totalEarnedDiv.textContent = `sh.${parseInt(stats.total_earned).toLocaleString()}`;
+                }
+            }
+            
+            // Load recent applications if available
+            loadRecentApplications();
+        }
+        
+        async function loadRecentApplications() {
+            try {
+                const response = await apiFetch('/applications?status=pending');
+                if (response.success && response.applications) {
+                    const tbody = document.querySelector('.table tbody');
+                    if (tbody && response.applications.length > 0) {
+                        tbody.innerHTML = response.applications.slice(0, 5).map(app => `
+                            <tr>
+                                <td>${app.gig_title || 'N/A'}</td>
+                                <td><span class="pill yellow">${app.status || 'pending'}</span></td>
+                                <td>${new Date(app.applied_at).toLocaleDateString()}</td>
+                            </tr>
+                        `).join('');
+                    } else if (tbody) {
+                        tbody.innerHTML = '<tr><td colspan="3" class="text-center subtle">No recent applications</td></tr>';
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load recent applications:', error);
+                // Don't show error notification - just keep static data
+            }
+        }
+    </script>
+</body>
+</html>
