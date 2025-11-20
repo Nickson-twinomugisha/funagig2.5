@@ -11,7 +11,7 @@ require_once 'email.php';
 // Get request method and path
 $method = $_SERVER['REQUEST_METHOD'];
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$path = str_replace('/funagig/php/api.php', '', $path);
+$path = str_replace('/funagig/api.php', '', $path);
 
 // Route the request
 switch ($path) {
@@ -1646,7 +1646,7 @@ function handleUpload() {
     }
     
     // Create upload directory if it doesn't exist
-    $uploadDir = __DIR__ . '/../' . UPLOAD_PATH;
+    $uploadDir = __DIR__ . '/' . UPLOAD_PATH;
     $typeDir = $uploadDir . $uploadType . '/';
     
     if (!is_dir($uploadDir)) {
@@ -1889,7 +1889,7 @@ function handlePortfolio() {
         }
         
         // Delete file from filesystem
-        $filePath = __DIR__ . '/../' . $file['file_path'];
+        $filePath = __DIR__ . '/' . $file['file_path'];
         if (file_exists($filePath)) {
             unlink($filePath);
         }

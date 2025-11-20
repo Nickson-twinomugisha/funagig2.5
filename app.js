@@ -2,7 +2,7 @@
 // Shared utilities, API calls, localStorage management
 
 // API Configuration
-const API_BASE_URL = '/funagig/php/api.php';
+const API_BASE_URL = '/funagig/api.php';
 const WEBSOCKET_URL = 'http://localhost:3001';
 
 // CSRF Token Management

@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login - FunaGig</title>
-    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js"></script>
 </head>
 
 <body>
@@ -62,7 +63,15 @@
     </main>
 
     <script>
-        document.getElementById('login-form').addEventListener('submit', function(e) {
+        // Wait for DOM and app.js to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Ensure apiFetch is available
+            if (typeof apiFetch === 'undefined') {
+                console.error('apiFetch is not defined. Make sure app.js is loaded.');
+                return;
+            }
+            
+            document.getElementById('login-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
             clearErrors();
@@ -134,6 +143,7 @@
                     console.error('Login error:', error);
                 });
             }
+            });
         });
         
         function clearErrors() {
@@ -158,6 +168,5 @@
             return emailRegex.test(email);
         }
     </script>
-    <script src="js/app.js"></script>
 </body>
 </html>
