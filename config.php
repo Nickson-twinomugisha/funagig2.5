@@ -2,6 +2,13 @@
 // Database configuration for FunaGig
 // Simple mysqli connection setup for XAMPP deployment
 
+// Load local configuration if it exists (for sensitive data like passwords, secrets)
+// This file should NOT be committed to version control
+// Copy config.local.php.example to config.local.php and update with your actual values
+if (file_exists(__DIR__ . '/config.local.php')) {
+    require_once __DIR__ . '/config.local.php';
+}
+
 // Database configuration
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'funagig');

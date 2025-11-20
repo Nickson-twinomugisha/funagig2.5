@@ -4,6 +4,7 @@
 
 require_once 'config.php';
 require_once 'websocket-emitter.php';
+require_once 'email.php';
 
 // Session is started in config.php
 
@@ -1567,6 +1568,13 @@ function handleUpload() {
     $fileSize = $file['size'];
     $fileError = $file['error'];
     
+    // Sanitize filename to prevent path traversal and other security issues
+    // Remove any directory separators, null bytes, and other dangerous characters
+    $fileName = basename($fileName); // Remove any path components
+    $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName); // Replace invalid characters with underscore
+    $fileName = preg_replace('/_{2,}/', '_', $fileName); // Replace multiple underscores with single
+    $fileName = trim($fileName, '._-'); // Remove leading/trailing dots, underscores, hyphens
+    
     // Validate file size
     if ($fileSize > MAX_FILE_SIZE) {
         sendError('File size exceeds maximum allowed size of ' . (MAX_FILE_SIZE / 1024 / 1024) . 'MB');
@@ -1595,6 +1603,48 @@ function handleUpload() {
         return;
     }
     
+    // Validate MIME type using finfo_file() to verify actual file type (not just extension)
+    if (!function_exists('finfo_open')) {
+        // Fallback if finfo extension is not available
+        error_log('Warning: finfo extension not available. MIME type validation skipped.');
+    } else {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $fileTmpName);
+        finfo_close($finfo);
+        
+        // Define allowed MIME types for each upload type
+        $allowedMimeTypes = [
+            'profile' => ['image/jpeg', 'image/png', 'image/gif'],
+            'resume' => ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+            'portfolio' => ['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+            'message' => ['image/jpeg', 'image/png', 'application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+            'gig' => ['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        ];
+        
+        if (!isset($allowedMimeTypes[$uploadType]) || !in_array($mimeType, $allowedMimeTypes[$uploadType])) {
+            sendError('Invalid file type. MIME type mismatch. Detected: ' . $mimeType);
+            return;
+        }
+        
+        // Validate extension matches MIME type (secondary check)
+        $extensionMimeMap = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'pdf' => 'application/pdf',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'txt' => 'text/plain'
+        ];
+        
+        $expectedMimeType = $extensionMimeMap[$fileExt] ?? null;
+        if ($expectedMimeType && $expectedMimeType !== $mimeType) {
+            sendError('File extension does not match file type. Expected: ' . $expectedMimeType . ', Detected: ' . $mimeType);
+            return;
+        }
+    }
+    
     // Create upload directory if it doesn't exist
     $uploadDir = __DIR__ . '/../' . UPLOAD_PATH;
     $typeDir = $uploadDir . $uploadType . '/';
@@ -1607,8 +1657,10 @@ function handleUpload() {
         mkdir($typeDir, 0755, true);
     }
     
-    // Generate unique filename
-    $newFileName = uniqid('', true) . '_' . time() . '.' . $fileExt;
+    // Generate unique filename (sanitized)
+    // Ensure extension is safe (already validated, but double-check)
+    $safeExt = preg_replace('/[^a-zA-Z0-9]/', '', $fileExt);
+    $newFileName = uniqid('', true) . '_' . time() . '.' . $safeExt;
     $filePath = $typeDir . $newFileName;
     $relativePath = UPLOAD_PATH . $uploadType . '/' . $newFileName;
     
@@ -1906,22 +1958,16 @@ function handleForgotPassword() {
                 [$user['id'], $token, $expiresAt]
             );
             
-            // In production, send email with reset link
-            // For development, we'll return the token so user can use it
-            // TODO: Implement email sending in production
-            /*
+            // Send email with reset link
             $resetLink = APP_URL . '/reset-password.html?token=' . $token;
             sendPasswordResetEmail($user['email'], $user['name'], $resetLink);
-            */
         }
         
         // Always return success (don't reveal if email exists)
+        // Token is no longer returned in response for security
         sendResponse([
             'success' => true,
-            'message' => 'If an account with that email exists, a password reset link has been sent.',
-            // For development only - remove in production
-            'token' => $user ? $token : null,
-            'dev_mode' => true
+            'message' => 'If an account with that email exists, a password reset link has been sent.'
         ]);
         
     } catch (Exception $e) {

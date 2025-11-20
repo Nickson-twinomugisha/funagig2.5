@@ -1,0 +1,37 @@
+# Local configuration file (contains sensitive data like passwords, secrets)
+config.local.php
+
+# Uploads directory (user-uploaded files)
+uploads/
+
+# Logs directory
+logs/
+*.log
+
+# PHP error logs
+php_errors.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS files
+Thumbs.db
+desktop.ini
+
