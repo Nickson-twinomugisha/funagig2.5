@@ -35,15 +35,15 @@
 
             <!-- Quick Stats -->
             <div class="grid-4">
-                <div class="section"><div style="font-size:32px; color:var(--primary);">3</div><p>Active Tasks</p></div>
-                <div class="section"><div style="font-size:32px; color:var(--warning);">2</div><p>Pending Tasks</p></div>
-                <div class="section"><div style="font-size:32px; color:var(--success);">5</div><p>Completed Tasks</p></div>
-                <div class="section"><div style="font-size:32px; color:var(--info);">4.6</div><p>Average Rating</p></div>
+                <div class="section"><div id="activeTasks" style="font-size:32px; color:var(--primary);">-</div><p>Active Tasks</p></div>
+                <div class="section"><div id="pendingTasks" style="font-size:32px; color:var(--warning);">-</div><p>Pending Tasks</p></div>
+                <div class="section"><div id="completedTasks" style="font-size:32px; color:var(--success);">-</div><p>Completed Tasks</p></div>
+                <div class="section"><div id="averageRating" style="font-size:32px; color:var(--info);">-</div><p>Average Rating</p></div>
             </div>
             <div class="grid-4 mt-20">
-                <div class="section"><div style="font-size:24px; color:var(--success);">sh.2,100,000</div><p>Total Earned</p></div>
-                <div class="section"><div style="font-size:24px; color:var(--primary);">10</div><p>Total Tasks</p></div>
-                <div class="section"><div style="font-size:24px; color:var(--warning);">45</div><p>Days Active</p></div>
+                <div class="section"><div id="totalEarned" style="font-size:24px; color:var(--success);">-</div><p>Total Earned</p></div>
+                <div class="section"><div id="totalTasks" style="font-size:24px; color:var(--primary);">-</div><p>Total Tasks</p></div>
+                <div class="section"><div id="daysActive" style="font-size:24px; color:var(--warning);">-</div><p>Days Active</p></div>
                 <div class="section"><a class="btn" href="student-gigs.html#browse">Browse Gigs</a></div>
             </div>
 
@@ -52,9 +52,8 @@
                 <h2 class="h2">Recent Applications</h2>
                 <table class="table">
                     <thead><tr><th>Gig</th><th>Status</th><th>Date</th></tr></thead>
-                    <tbody>
-                        <tr><td>Web Dev</td><td><span class="pill yellow">Pending</span></td><td>2024-09-15</td></tr>
-                        <tr><td>Graphic Design</td><td><span class="pill green">Accepted</span></td><td>2024-09-10</td></tr>
+                    <tbody id="recentApplicationsTable">
+                        <tr><td colspan="3" class="text-center subtle">Loading applications...</td></tr>
                     </tbody>
                 </table>
                 <a href="student-gigs.html#applications" class="btn secondary mt-10">View All Applications</a>
@@ -64,7 +63,9 @@
             <div class="grid-2 mt-20">
                 <div class="section">
                     <h2 class="h2">Recent Activity</h2>
-                    <ul id="recentActivity"><li>Saved gig: Social Media</li><li>Applied to: Tutoring</li></ul>
+                    <ul id="recentActivity">
+                        <li class="subtle" style="padding: 10px;">Loading recent activity...</li>
+                    </ul>
                 </div>
                 <div class="section">
                     <div class="flex items-center justify-between mb-10">
@@ -140,7 +141,7 @@
                 }
             } catch (error) {
                 console.error('Failed to load dashboard data:', error);
-                showNotification('Failed to load dashboard data', 'error');
+                Toast.error('Failed to load dashboard data');
             }
         }
         
@@ -294,54 +295,94 @@
         function updateDashboardStats(stats) {
             if (!stats) return;
             
-            // Update stats in the first grid (Active, Pending, Completed)
-            const grid4 = document.querySelector('.grid-4');
-            if (grid4) {
-                const sections = grid4.querySelectorAll('.section');
-                if (sections.length >= 3) {
-                    const activeDiv = sections[0].querySelector('div');
-                    const pendingDiv = sections[1].querySelector('div');
-                    const completedDiv = sections[2].querySelector('div');
-                    
-                    if (activeDiv) activeDiv.textContent = stats.active_tasks || 0;
-                    if (pendingDiv) pendingDiv.textContent = stats.pending_tasks || 0;
-                    if (completedDiv) completedDiv.textContent = stats.completed_tasks || 0;
+            // Update first grid stats
+            const activeTasks = document.getElementById('activeTasks');
+            const pendingTasks = document.getElementById('pendingTasks');
+            const completedTasks = document.getElementById('completedTasks');
+            const averageRating = document.getElementById('averageRating');
+            
+            if (activeTasks) activeTasks.textContent = stats.active_tasks || 0;
+            if (pendingTasks) pendingTasks.textContent = stats.pending_tasks || 0;
+            if (completedTasks) completedTasks.textContent = stats.completed_tasks || 0;
+            if (averageRating) {
+                if (stats.average_rating && stats.average_rating > 0) {
+                    averageRating.textContent = stats.average_rating.toFixed(1);
+                } else {
+                    averageRating.textContent = '-';
                 }
             }
             
-            // Update total earned in second grid
-            const secondGrid = document.querySelector('.grid-4.mt-20');
-            if (secondGrid) {
-                const totalEarnedDiv = secondGrid.querySelector('.section:first-child div');
-                if (totalEarnedDiv && stats.total_earned) {
-                    totalEarnedDiv.textContent = `sh.${parseInt(stats.total_earned).toLocaleString()}`;
+            // Update second grid stats
+            const totalEarned = document.getElementById('totalEarned');
+            const totalTasks = document.getElementById('totalTasks');
+            const daysActive = document.getElementById('daysActive');
+            
+            if (totalEarned) {
+                if (stats.total_earned && stats.total_earned > 0) {
+                    totalEarned.textContent = `sh.${parseInt(stats.total_earned).toLocaleString()}`;
+                } else {
+                    totalEarned.textContent = 'sh.0';
                 }
             }
+            if (totalTasks) totalTasks.textContent = stats.total_tasks || 0;
+            if (daysActive) daysActive.textContent = stats.days_active || 0;
             
-            // Load recent applications if available
+            // Load recent applications
             loadRecentApplications();
+            
+            // Load recent activity
+            updateRecentActivity(stats.recent_activity || []);
+        }
+        
+        // Update recent activity
+        function updateRecentActivity(activities) {
+            const container = document.getElementById('recentActivity');
+            if (!container) return;
+            
+            if (!activities || activities.length === 0) {
+                container.innerHTML = '<li class="subtle" style="padding: 10px;">No recent activity</li>';
+                return;
+            }
+            
+            container.innerHTML = activities.slice(0, 5).map(activity => {
+                const timeAgo = formatTimeAgo(activity.date);
+                return `<li style="padding: 8px 0; border-bottom: 1px solid var(--border);">${escapeHtml(activity.message)} <span class="subtle" style="font-size: 12px;">(${timeAgo})</span></li>`;
+            }).join('');
         }
         
         async function loadRecentApplications() {
             try {
-                const response = await apiFetch('/applications?status=pending');
+                const response = await apiFetch('/applications');
                 if (response.success && response.applications) {
-                    const tbody = document.querySelector('.table tbody');
-                    if (tbody && response.applications.length > 0) {
-                        tbody.innerHTML = response.applications.slice(0, 5).map(app => `
-                            <tr>
-                                <td>${app.gig_title || 'N/A'}</td>
-                                <td><span class="pill yellow">${app.status || 'pending'}</span></td>
-                                <td>${new Date(app.applied_at).toLocaleDateString()}</td>
-                            </tr>
-                        `).join('');
-                    } else if (tbody) {
-                        tbody.innerHTML = '<tr><td colspan="3" class="text-center subtle">No recent applications</td></tr>';
+                    const tbody = document.getElementById('recentApplicationsTable');
+                    if (tbody) {
+                        if (response.applications.length > 0) {
+                            // Sort by applied_at date (most recent first) and show top 5
+                            const recentApps = response.applications
+                                .sort((a, b) => new Date(b.applied_at || b.created_at) - new Date(a.applied_at || a.created_at))
+                                .slice(0, 5);
+                            
+                            tbody.innerHTML = recentApps.map(app => {
+                                const statusClass = app.status === 'accepted' ? 'green' : app.status === 'rejected' ? 'red' : 'yellow';
+                                return `
+                                    <tr>
+                                        <td>${escapeHtml(app.gig_title || 'N/A')}</td>
+                                        <td><span class="pill ${statusClass}">${escapeHtml(app.status || 'pending')}</span></td>
+                                        <td>${new Date(app.applied_at || app.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                `;
+                            }).join('');
+                        } else {
+                            tbody.innerHTML = '<tr><td colspan="3" class="text-center subtle">No recent applications</td></tr>';
+                        }
                     }
                 }
             } catch (error) {
                 console.error('Failed to load recent applications:', error);
-                // Don't show error notification - just keep static data
+                const tbody = document.getElementById('recentApplicationsTable');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center subtle">Failed to load applications</td></tr>';
+                }
             }
         }
     </script>

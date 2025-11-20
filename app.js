@@ -2027,8 +2027,21 @@ const WebSocketClient = {
                     }, delay);
                 } else {
                     console.error('Max reconnection attempts reached. WebSocket connection failed.');
-                    if (typeof Toast !== 'undefined') {
-                        Toast.warning('Unable to connect to real-time server. Some features may be limited.');
+                    // Only show warning once per session to avoid spam
+                    // Check if we're in the middle of a user action (like reporting) - suppress warning
+                    const isUserAction = document.activeElement && (
+                        document.activeElement.tagName === 'BUTTON' ||
+                        document.activeElement.onclick !== null
+                    );
+                    
+                    if (typeof Toast !== 'undefined' && !sessionStorage.getItem('websocket_warning_shown') && !isUserAction) {
+                        sessionStorage.setItem('websocket_warning_shown', 'true');
+                        // Delay the warning slightly to avoid showing during button clicks
+                        setTimeout(() => {
+                            if (!sessionStorage.getItem('websocket_warning_shown_after_action')) {
+                                Toast.warning('Unable to connect to real-time server. Some features may be limited.');
+                            }
+                        }, 500);
                     }
                 }
             });

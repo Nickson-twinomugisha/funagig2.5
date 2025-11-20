@@ -94,6 +94,23 @@
             </div>
         </main>
     </div>
+    
+    <!-- Gig Details Modal -->
+    <div id="gigDetailsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="gigModalTitle">Gig Details</h2>
+                <button class="btn-icon" onclick="closeGigDetailsModal()" style="font-size: 24px; background: none; border: none; cursor: pointer;">×</button>
+            </div>
+            <div class="modal-body" id="gigDetailsContent">
+                <div style="text-align: center; padding: 40px;">
+                    <div class="loading-spinner"></div>
+                    <p class="subtle">Loading gig details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script src="app.js"></script>
     <script>
         // Global variables for real-time updates
@@ -177,6 +194,356 @@
             }
         });
         
+        // Store current conversation data
+        let currentConversationData = null;
+        
+        // View Gig Details - Display gig details in a modal
+        async function viewGigDetails() {
+            if (!currentConversationId) {
+                Toast.error('No conversation selected');
+                return;
+            }
+            
+            try {
+                // Show modal with loading state
+                const modal = document.getElementById('gigDetailsModal');
+                const content = document.getElementById('gigDetailsContent');
+                if (modal) modal.style.display = 'flex';
+                if (content) {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <div class="loading-spinner"></div>
+                            <p class="subtle">Loading gig details...</p>
+                        </div>
+                    `;
+                }
+                
+                // Get the other user (employer) from the conversation
+                const conversations = await apiFetch('/conversations');
+                if (!conversations.success || !conversations.conversations) {
+                    closeGigDetailsModal();
+                    Toast.error('Failed to load conversation details');
+                    return;
+                }
+                
+                const conversation = conversations.conversations.find(c => c.id === currentConversationId);
+                if (!conversation) {
+                    closeGigDetailsModal();
+                    Toast.error('Conversation not found');
+                    return;
+                }
+                
+                const employerId = conversation.other_user_id;
+                const currentUserId = getCurrentUserId();
+                
+                // Find the gig through applications (where student applied to employer's gig)
+                const applications = await apiFetch('/applications');
+                let relevantGigId = null;
+                
+                if (applications.success && applications.applications) {
+                    // Get all gigs to find which ones belong to this employer
+                    const allGigs = await apiFetch('/gigs');
+                    
+                    if (allGigs.success && allGigs.gigs) {
+                        // Find gigs owned by the employer
+                        const employerGigs = allGigs.gigs.filter(gig => gig.user_id === employerId);
+                        
+                        // Find the most recent application to one of these gigs
+                        for (const app of applications.applications) {
+                            if (app.user_id === currentUserId && employerGigs.some(g => g.id === app.gig_id)) {
+                                relevantGigId = app.gig_id;
+                                break; // Use the first match
+                            }
+                        }
+                    }
+                }
+                
+                if (!relevantGigId) {
+                    closeGigDetailsModal();
+                    Toast.info('No specific gig found for this conversation. You can browse all gigs instead.');
+                    return;
+                }
+                
+                // Fetch gig details
+                const gigResponse = await apiFetch(`/gigs/${relevantGigId}`);
+                
+                if (gigResponse.success && gigResponse.gig) {
+                    displayGigDetails(gigResponse.gig, relevantGigId);
+                } else {
+                    closeGigDetailsModal();
+                    Toast.error('Failed to load gig details');
+                }
+                
+            } catch (error) {
+                closeGigDetailsModal();
+                console.error('Error viewing gig details:', error);
+                Toast.error('Failed to load gig details. Please try again.');
+            }
+        }
+        
+        // Display gig details in modal
+        function displayGigDetails(gig, gigId) {
+            const content = document.getElementById('gigDetailsContent');
+            const title = document.getElementById('gigModalTitle');
+            
+            if (!content) return;
+            
+            const deadline = new Date(gig.deadline).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            const createdDate = new Date(gig.created_at).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            const skills = gig.skills ? gig.skills.split(',').map(s => s.trim()) : [];
+            
+            if (title) title.textContent = escapeHtml(gig.title || 'Gig Details');
+            
+            content.innerHTML = `
+                <div style="padding: 20px;">
+                    <!-- Header -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 24px; color: var(--text-primary);">${escapeHtml(gig.title || 'Untitled Gig')}</h3>
+                        ${gig.business_name ? `<p class="subtle" style="margin: 0;">By: ${escapeHtml(gig.business_name)}</p>` : ''}
+                    </div>
+                    
+                    <!-- Status Badge -->
+                    <div style="margin-bottom: 20px;">
+                        <span class="pill ${gig.status === 'active' ? 'green' : 'yellow'}">${gig.status || 'active'}</span>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div style="margin-bottom: 24px;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 16px; color: var(--text-primary);">Description</h4>
+                        <p style="margin: 0; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap;">${escapeHtml(gig.description || 'No description provided.')}</p>
+                    </div>
+                    
+                    <!-- Details Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                        <div>
+                            <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Budget</div>
+                            <div style="font-size: 18px; font-weight: 600; color: var(--primary);">sh.${parseInt(gig.budget || 0).toLocaleString()}</div>
+                        </div>
+                        <div>
+                            <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Deadline</div>
+                            <div style="font-size: 16px; font-weight: 500;">${deadline}</div>
+                        </div>
+                        <div>
+                            <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Type</div>
+                            <div style="font-size: 16px; font-weight: 500;">${formatGigType(gig.type || 'one-time')}</div>
+                        </div>
+                        <div>
+                            <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Location</div>
+                            <div style="font-size: 16px; font-weight: 500;">${escapeHtml(gig.location || 'Remote')}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Skills -->
+                    ${skills.length > 0 ? `
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 16px; color: var(--text-primary);">Required Skills</h4>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${skills.map(skill => `<span class="pill blue">${escapeHtml(skill)}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Additional Info -->
+                    <div style="margin-bottom: 24px; padding: 16px; background: var(--bg-secondary, #f5f5f5); border-radius: 8px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; font-size: 14px;">
+                            ${gig.application_count !== undefined ? `
+                                <div>
+                                    <span class="subtle">Applications: </span>
+                                    <span style="font-weight: 600;">${gig.application_count || 0}</span>
+                                </div>
+                            ` : ''}
+                            ${gig.interest_count !== undefined ? `
+                                <div>
+                                    <span class="subtle">Interested: </span>
+                                    <span style="font-weight: 600;">${gig.interest_count || 0}</span>
+                                </div>
+                            ` : ''}
+                            ${gig.view_count !== undefined ? `
+                                <div>
+                                    <span class="subtle">Views: </span>
+                                    <span style="font-weight: 600;">${gig.view_count || 0}</span>
+                                </div>
+                            ` : ''}
+                            <div>
+                                <span class="subtle">Posted: </span>
+                                <span style="font-weight: 500;">${createdDate}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            `;
+        }
+        
+        // Format gig type
+        function formatGigType(type) {
+            const types = {
+                'one-time': 'One-Time',
+                'ongoing': 'Ongoing',
+                'contract': 'Contract'
+            };
+            return types[type] || type;
+        }
+        
+        // Apply to gig from modal
+        async function applyToGigFromModal(gigId, gigTitle) {
+            closeGigDetailsModal();
+            
+            // Check if already applied
+            try {
+                const applicationsResponse = await apiFetch('/applications');
+                if (applicationsResponse.success && applicationsResponse.applications) {
+                    const alreadyApplied = applicationsResponse.applications.find(
+                        app => app.gig_id == gigId
+                    );
+                    
+                    if (alreadyApplied) {
+                        Toast.info('You have already applied to this gig');
+                        return;
+                    }
+                }
+            } catch (error) {
+                // Continue even if check fails
+            }
+            
+            // Show application modal
+            const applicationData = await ApplicationModal.show(gigTitle, gigId);
+            if (!applicationData) {
+                return; // User cancelled
+            }
+            
+            try {
+                const response = await apiFetch('/applications', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        gig_id: gigId,
+                        message: applicationData.message.trim(),
+                        resume_path: applicationData.resume_path || null
+                    })
+                });
+                
+                if (response.success) {
+                    Toast.success('Application submitted successfully!');
+                } else {
+                    Toast.error(response.error || 'Failed to submit application');
+                }
+            } catch (error) {
+                console.error('Application error:', error);
+                Toast.error('Failed to submit application. Please try again.');
+            }
+        }
+        
+        // Close gig details modal
+        function closeGigDetailsModal() {
+            const modal = document.getElementById('gigDetailsModal');
+            if (modal) modal.style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('gigDetailsModal');
+            if (modal && event.target === modal) {
+                closeGigDetailsModal();
+            }
+        });
+        
+        // Report Employer - Show report modal
+        async function reportEmployer() {
+            if (!currentConversationId) {
+                Toast.error('No conversation selected');
+                return;
+            }
+            
+            // Suppress WebSocket warnings during report submission
+            sessionStorage.setItem('websocket_warning_shown_after_action', 'true');
+            
+            try {
+                // Get the other user (employer) from the conversation
+                // Use silent mode to prevent WebSocket notifications
+                const conversations = await apiFetch('/conversations', {
+                    silent: true,
+                    retry: false
+                });
+                if (!conversations.success || !conversations.conversations) {
+                    Toast.error('Failed to load conversation details');
+                    return;
+                }
+                
+                const conversation = conversations.conversations.find(c => c.id === currentConversationId);
+                if (!conversation) {
+                    Toast.error('Conversation not found');
+                    return;
+                }
+                
+                const employerName = conversation.other_user_name || 'Employer';
+                const employerId = conversation.other_user_id;
+                
+                // Show report modal
+                const reportReason = prompt(
+                    `Report ${employerName}?\n\nPlease describe the issue:\n\n` +
+                    `1. Inappropriate behavior\n` +
+                    `2. Spam or scam\n` +
+                    `3. Harassment\n` +
+                    `4. Other (please describe)`,
+                    ''
+                );
+                
+                if (!reportReason || reportReason.trim() === '') {
+                    return; // User cancelled
+                }
+                
+                // Submit report - use silent mode to prevent WebSocket notifications
+                try {
+                    const reportData = {
+                        name: Auth.getUser()?.name || 'Student',
+                        email: Auth.getUser()?.email || '',
+                        subject: `Report User: ${employerName}`,
+                        message: `Reported User ID: ${employerId}\nReported User Name: ${employerName}\n\nReason: ${reportReason.trim()}`
+                    };
+                    
+                    const response = await apiFetch('/contact', {
+                        method: 'POST',
+                        body: JSON.stringify(reportData),
+                        silent: true, // Suppress error notifications
+                        retry: false // Don't retry to avoid delays
+                    });
+                    
+                    if (response.success) {
+                        Toast.success('Report submitted successfully. Our team will review it.');
+                    } else {
+                        Toast.error(response.error || 'Failed to submit report. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Error submitting report:', error);
+                    // Only show user-friendly error, no WebSocket notifications
+                    Toast.error('Failed to submit report. Please contact support directly.');
+                } finally {
+                    // Clear the suppression flag after a delay to allow future warnings if needed
+                    setTimeout(() => {
+                        sessionStorage.removeItem('websocket_warning_shown_after_action');
+                    }, 2000);
+                }
+                
+            } catch (error) {
+                console.error('Error reporting employer:', error);
+                Toast.error('Failed to load employer details');
+                // Clear the suppression flag on error too
+                setTimeout(() => {
+                    sessionStorage.removeItem('websocket_warning_shown_after_action');
+                }, 2000);
+            }
+        }
+        
         // Cleanup on page unload
         window.addEventListener('beforeunload', function() {
             if (messagePollInterval) {
@@ -212,7 +579,12 @@
                         formatMessageTime(conv.last_message_time) : '';
                     
                     return `
-                        <div class="conversation-item ${unreadClass}" data-conversation-id="${conv.id}" onclick="selectConversation(${conv.id})">
+                        <div class="conversation-item ${unreadClass}" 
+                             data-conversation-id="${conv.id}" 
+                             data-other-user-id="${conv.other_user_id || ''}"
+                             data-other-user-name="${escapeHtml(conv.other_user_name || 'User')}"
+                             data-other-user-email="${escapeHtml(conv.other_user_email || '')}"
+                             onclick="selectConversation(${conv.id})">
                             <div class="conversation-avatar">${(conv.other_user_name || 'U').charAt(0).toUpperCase()}</div>
                         <div class="conversation-content">
                                 <div class="conversation-name">${escapeHtml(conv.other_user_name || 'User')}</div>
@@ -260,6 +632,20 @@
             // Set current conversation
             currentConversationId = conversationId;
             
+            // Store conversation data for use in buttons
+            const conversations = document.querySelectorAll('.conversation-item');
+            conversations.forEach(item => {
+                if (parseInt(item.dataset.conversationId) === conversationId) {
+                    // Store conversation data
+                    currentConversationData = {
+                        id: conversationId,
+                        otherUserId: item.dataset.otherUserId || null,
+                        otherUserName: item.dataset.otherUserName || 'User',
+                        otherUserEmail: item.dataset.otherUserEmail || ''
+                    };
+                }
+            });
+            
             // Remove unread styling from selected conversation
             document.querySelectorAll('.conversation-item').forEach(item => {
                 if (parseInt(item.dataset.conversationId) === conversationId) {
@@ -306,6 +692,9 @@
                 if (response.success) {
                     updateMessagesList(response.messages);
                     showChatArea();
+                    
+                    // Update chat header with user info
+                    updateChatHeader(conversationId);
                     
                     // Auto-scroll to bottom
                     const chatMessages = document.getElementById('chatMessages');
@@ -546,6 +935,40 @@
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        // Update chat header with conversation user info
+        async function updateChatHeader(conversationId) {
+            try {
+                const conversations = await apiFetch('/conversations');
+                if (conversations.success && conversations.conversations) {
+                    const conversation = conversations.conversations.find(c => c.id === conversationId);
+                    if (conversation) {
+                        const userName = conversation.other_user_name || 'User';
+                        const userEmail = conversation.other_user_email || '';
+                        const userInitials = userName.charAt(0).toUpperCase();
+                        
+                        // Update header elements
+                        const avatar = document.getElementById('chatUserAvatar');
+                        const name = document.getElementById('chatUserName');
+                        const email = document.getElementById('chatUserEmail');
+                        
+                        if (avatar) avatar.textContent = userInitials;
+                        if (name) name.textContent = userName;
+                        if (email) email.textContent = userEmail;
+                        
+                        // Store conversation data
+                        currentConversationData = {
+                            id: conversationId,
+                            otherUserId: conversation.other_user_id,
+                            otherUserName: userName,
+                            otherUserEmail: userEmail
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to update chat header:', error);
+            }
         }
         
         function showChatArea() {

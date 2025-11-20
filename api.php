@@ -372,10 +372,152 @@ function handleDashboard() {
         $stats = getBusinessStats($db, $user['id']);
     }
     
+    // Get recent activity
+    $recentActivity = [];
+    if ($user['type'] === 'business') {
+        $recentActivity = getBusinessRecentActivity($db, $user['id']);
+    } else if ($user['type'] === 'student') {
+        $recentActivity = getStudentRecentActivity($db, $user['id']);
+    }
+    
     sendResponse([
         'success' => true,
-        'stats' => $stats
+        'stats' => $stats,
+        'recent_activity' => $recentActivity
     ]);
+}
+
+function getBusinessRecentActivity($db, $userId) {
+    $activities = [];
+    
+    // Recent applications (last 5)
+    $recentApplications = $db->fetchAll(
+        "SELECT a.*, g.title as gig_title, u.name as student_name, a.applied_at as activity_date
+         FROM applications a
+         JOIN gigs g ON a.gig_id = g.id
+         JOIN users u ON a.user_id = u.id
+         WHERE g.user_id = ?
+         ORDER BY a.applied_at DESC
+         LIMIT 5",
+        [$userId]
+    );
+    
+    foreach ($recentApplications as $app) {
+        $activities[] = [
+            'type' => 'application',
+            'title' => 'New Application',
+            'message' => "{$app['student_name']} applied to \"{$app['gig_title']}\"",
+            'date' => $app['activity_date'],
+            'gig_id' => $app['gig_id'],
+            'application_id' => $app['id']
+        ];
+    }
+    
+    // Recent gig posts (last 5)
+    $recentGigs = $db->fetchAll(
+        "SELECT id, title, created_at as activity_date
+         FROM gigs
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+         LIMIT 5",
+        [$userId]
+    );
+    
+    foreach ($recentGigs as $gig) {
+        $activities[] = [
+            'type' => 'gig_posted',
+            'title' => 'Gig Posted',
+            'message' => "Successfully posted \"{$gig['title']}\"",
+            'date' => $gig['activity_date'],
+            'gig_id' => $gig['id']
+        ];
+    }
+    
+    // Recent hires (accepted applications)
+    $recentHires = $db->fetchAll(
+        "SELECT a.*, g.title as gig_title, u.name as student_name, a.responded_at as activity_date
+         FROM applications a
+         JOIN gigs g ON a.gig_id = g.id
+         JOIN users u ON a.user_id = u.id
+         WHERE g.user_id = ? AND a.status = 'accepted'
+         ORDER BY a.responded_at DESC
+         LIMIT 5",
+        [$userId]
+    );
+    
+    foreach ($recentHires as $hire) {
+        $activities[] = [
+            'type' => 'student_hired',
+            'title' => 'Student Hired',
+            'message' => "Accepted {$hire['student_name']}'s application for \"{$hire['gig_title']}\"",
+            'date' => $hire['activity_date'],
+            'gig_id' => $hire['gig_id'],
+            'application_id' => $hire['id']
+        ];
+    }
+    
+    // Sort by date (most recent first) and return top 10
+    usort($activities, function($a, $b) {
+        return strtotime($b['date']) - strtotime($a['date']);
+    });
+    
+    return array_slice($activities, 0, 10);
+}
+
+function getStudentRecentActivity($db, $userId) {
+    $activities = [];
+    
+    // Recent applications submitted by student
+    $recentApplications = $db->fetchAll(
+        "SELECT a.*, g.title as gig_title, a.applied_at as activity_date
+         FROM applications a
+         JOIN gigs g ON a.gig_id = g.id
+         WHERE a.user_id = ?
+         ORDER BY a.applied_at DESC
+         LIMIT 5",
+        [$userId]
+    );
+    
+    foreach ($recentApplications as $app) {
+        $activities[] = [
+            'type' => 'application',
+            'title' => 'Application Submitted',
+            'message' => "Applied to \"{$app['gig_title']}\"",
+            'date' => $app['activity_date'],
+            'gig_id' => $app['gig_id'],
+            'application_id' => $app['id']
+        ];
+    }
+    
+    // Recent application status changes
+    $statusChanges = $db->fetchAll(
+        "SELECT a.*, g.title as gig_title, a.responded_at as activity_date
+         FROM applications a
+         JOIN gigs g ON a.gig_id = g.id
+         WHERE a.user_id = ? AND a.status IN ('accepted', 'rejected') AND a.responded_at IS NOT NULL
+         ORDER BY a.responded_at DESC
+         LIMIT 5",
+        [$userId]
+    );
+    
+    foreach ($statusChanges as $app) {
+        $statusText = $app['status'] === 'accepted' ? 'Accepted' : 'Rejected';
+        $activities[] = [
+            'type' => 'status_change',
+            'title' => 'Application ' . $statusText,
+            'message' => "Your application for \"{$app['gig_title']}\" was {$statusText}",
+            'date' => $app['activity_date'],
+            'gig_id' => $app['gig_id'],
+            'application_id' => $app['id']
+        ];
+    }
+    
+    // Sort by date (most recent first) and return top 10
+    usort($activities, function($a, $b) {
+        return strtotime($b['date']) - strtotime($a['date']);
+    });
+    
+    return array_slice($activities, 0, 10);
 }
 
 function getStudentStats($db, $userId) {
@@ -407,6 +549,16 @@ function getStudentStats($db, $userId) {
         [$userId]
     )['total'];
     
+    // Average rating
+    $ratingData = $db->fetchOne(
+        "SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews 
+         FROM reviews WHERE reviewee_id = ?",
+        [$userId]
+    );
+    $stats['average_rating'] = $ratingData && $ratingData['avg_rating'] ? 
+        round((float)$ratingData['avg_rating'], 1) : 0;
+    $stats['total_reviews'] = (int)($ratingData['total_reviews'] ?? 0);
+    
     return $stats;
 }
 
@@ -434,6 +586,16 @@ function getBusinessStats($db, $userId) {
          WHERE g.user_id = ? AND a.status = 'accepted'",
         [$userId]
     )['count'];
+    
+    // Average rating
+    $ratingData = $db->fetchOne(
+        "SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews 
+         FROM reviews WHERE reviewee_id = ?",
+        [$userId]
+    );
+    $stats['average_rating'] = $ratingData && $ratingData['avg_rating'] ? 
+        round((float)$ratingData['avg_rating'], 1) : 0;
+    $stats['total_reviews'] = (int)($ratingData['total_reviews'] ?? 0);
     
     return $stats;
 }

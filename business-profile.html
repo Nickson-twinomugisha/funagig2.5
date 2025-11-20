@@ -60,19 +60,19 @@
                                 </div>
                         </div>
                         <div>
-                                <h2 style="margin: 0; font-size: 24px;">Tech Solutions Inc.</h2>
-                                <p class="subtle" style="margin: 4px 0;">Software Development Company</p>
-                                <p class="subtle">Established in 2015 | 50–100 employees</p>
+                                <h2 id="profileCompanyName" style="margin: 0; font-size: 24px;">Loading...</h2>
+                                <p id="profileIndustry" class="subtle" style="margin: 4px 0;">Loading...</p>
+                                <p id="profileEstablished" class="subtle" style="display: none;"></p>
                                 <div class="flex items-center gap-10 mt-8">
-                                    <span class="pill green">Verified Business</span>
-                                    <span class="pill blue">Premium Member</span>
+                                    <span id="verifiedBadge" class="pill green" style="display: none;">Verified Business</span>
+                                    <span id="premiumBadge" class="pill blue" style="display: none;">Premium Member</span>
                                 </div>
                         </div>
                     </div>
                         <div class="text-right">
-                            <div style="font-size: 18px; font-weight: 600;">4.7/5</div>
+                            <div id="profileAverageRating" style="font-size: 18px; font-weight: 600;">-</div>
                             <div class="subtle">Average Rating</div>
-                            <div class="subtle" style="font-size: 12px;">Based on 24 reviews</div>
+                            <div id="profileTotalReviews" class="subtle" style="font-size: 12px;">0 reviews</div>
                         </div>
                 </div>
             </div>
@@ -83,87 +83,61 @@
                         <h3 class="h3" style="margin-bottom: 16px;">Company Information</h3>
                         <div class="info-item">
                             <span class="label">Industry</span>
-                            <span>Technology</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Company Size</span>
-                            <span>50-100 employees</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Founded</span>
-                            <span>2015</span>
+                            <span id="displayIndustry">-</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Location</span>
-                            <span>123 Innovation Drive, Tech City, Kampala</span>
+                            <span id="displayLocation">-</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Website</span>
-                            <span><a href="https://www.techsolutions.com" target="_blank" style="color: var(--primary);">www.techsolutions.com</a></span>
+                            <span id="displayWebsite">-</span>
                         </div>
                     </div>
             <div class="section">
                         <h3 class="h3" style="margin-bottom: 16px;">Contact Information</h3>
                         <div class="info-item">
                             <span class="label">Primary Contact</span>
-                            <span>Amanya Peter</span>
+                            <span id="displayName">-</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Email</span>
-                            <span>contact@techsolutions.com</span>
+                            <span id="displayEmail">-</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Phone</span>
-                            <span>+256 700 123 456</span>
+                            <span id="displayPhone">-</span>
                         </div>
-                        <div class="info-item">
-                            <span class="label">LinkedIn</span>
-                            <span><a href="#" style="color: var(--primary);">linkedin.com/company/techsolutions</a></span>
-                    </div>
-                        <div class="info-item">
-                            <span class="label">Twitter</span>
-                            <span><a href="#" style="color: var(--primary);">@techsolutions</a></span>
-                    </div>
                 </div>
             </div>
 
                 <!-- Business Description -->
                 <div class="section mb-20">
                     <h3 class="h3" style="margin-bottom: 16px;">About Us</h3>
-                    <p style="line-height: 1.6; margin-bottom: 16px;">
-                        Tech Solutions Inc. is a leading software development company specializing in innovative web and mobile applications. 
-                        We are committed to providing cutting-edge technology solutions to businesses of all sizes, with a focus on 
-                        scalability, security, and user experience.
-                    </p>
-                    <p style="line-height: 1.6; margin-bottom: 16px;">
-                        Our team of experienced developers, designers, and project managers work collaboratively to deliver high-quality 
-                        solutions that meet our clients' unique needs. We pride ourselves on our ability to adapt to new technologies 
-                        and industry trends while maintaining the highest standards of quality and professionalism.
-                    </p>
-                    <div class="flex gap-10">
-                        <span class="pill blue">Web Development</span>
-                        <span class="pill blue">Mobile Apps</span>
-                        <span class="pill blue">Cloud Solutions</span>
-                        <span class="pill blue">AI & Machine Learning</span>
+                    <div id="displayBio" style="line-height: 1.6; margin-bottom: 16px; white-space: pre-wrap;">
+                        <p class="subtle">No description provided.</p>
+                    </div>
+                    <div id="displaySkills" class="flex gap-10" style="flex-wrap: wrap;">
+                        <!-- Skills will be loaded here -->
                     </div>
                 </div>
 
                 <!-- Statistics -->
                 <div class="grid-4 mb-20">
                     <div class="section" style="text-align: center;">
-                        <div style="font-size: 32px; font-weight: 800; color: var(--primary);">8</div>
+                        <div id="profileActiveGigs" style="font-size: 32px; font-weight: 800; color: var(--primary);">-</div>
                         <div class="subtle">Active Gigs</div>
                     </div>
                     <div class="section" style="text-align: center;">
-                        <div style="font-size: 32px; font-weight: 800; color: var(--success);">45</div>
+                        <div id="profileTotalApplicants" style="font-size: 32px; font-weight: 800; color: var(--success);">-</div>
                         <div class="subtle">Total Applicants</div>
                     </div>
                     <div class="section" style="text-align: center;">
-                        <div style="font-size: 32px; font-weight: 800; color: var(--warning);">12</div>
+                        <div id="profileHiredStudents" style="font-size: 32px; font-weight: 800; color: var(--warning);">-</div>
                         <div class="subtle">Hired Students</div>
                     </div>
                     <div class="section" style="text-align: center;">
-                        <div style="font-size: 32px; font-weight: 800; color: var(--info);">4.7</div>
+                        <div id="profileStatsRating" style="font-size: 32px; font-weight: 800; color: var(--info);">-</div>
                         <div class="subtle">Average Rating</div>
                     </div>
                 </div>
@@ -354,11 +328,19 @@
                     </div>
                     <div class="field">
                         <label class="label">Website</label>
-                        <input class="input" id="editWebsite" value="https://www.techsolutions.com" />
+                        <input type="url" class="input" id="editWebsite" placeholder="https://www.example.com" />
                     </div>
                     <div class="field">
-                        <label class="label">Description</label>
-                        <textarea class="textarea" id="editDescription" rows="4">Tech Solutions Inc. is a leading software development company specializing in innovative web and mobile applications. We are committed to providing cutting-edge technology solutions to businesses of all sizes.</textarea>
+                        <label class="label">Phone</label>
+                        <input type="tel" class="input" id="editPhone" placeholder="+256 700 123 456" />
+                    </div>
+                    <div class="field">
+                        <label class="label">Description (Bio)</label>
+                        <textarea class="textarea" id="editDescription" rows="6" placeholder="Tell us about your business..."></textarea>
+                    </div>
+                    <div class="field">
+                        <label class="label">Skills (comma-separated)</label>
+                        <textarea class="textarea" id="editSkills" rows="3" placeholder="e.g., Web Development, Mobile Apps, Cloud Solutions"></textarea>
                     </div>
                     <div class="flex gap-10 mt-20">
                         <button type="button" class="btn secondary" onclick="closeEditModal()">Cancel</button>
@@ -752,15 +734,62 @@
         
         function updateProfileInfo(user) {
             // Update company name in header
-            const companyName = document.querySelector('.section h2');
+            const companyName = document.getElementById('profileCompanyName');
             if (companyName) {
                 companyName.textContent = user.name || 'Business Name';
             }
             
-            // Update company name in overview
-            const overviewName = document.querySelector('.section.mb-20 h2');
-            if (overviewName) {
-                overviewName.textContent = user.name || 'Business Name';
+            // Update industry
+            const industryEl = document.getElementById('profileIndustry');
+            if (industryEl) {
+                industryEl.textContent = user.industry || 'No industry specified';
+            }
+            
+            // Update verified badge
+            const verifiedBadge = document.getElementById('verifiedBadge');
+            if (verifiedBadge) {
+                verifiedBadge.style.display = user.is_verified ? 'inline-block' : 'none';
+            }
+            
+            // Update display fields
+            const displayIndustry = document.getElementById('displayIndustry');
+            const displayLocation = document.getElementById('displayLocation');
+            const displayWebsite = document.getElementById('displayWebsite');
+            const displayName = document.getElementById('displayName');
+            const displayEmail = document.getElementById('displayEmail');
+            const displayPhone = document.getElementById('displayPhone');
+            const displayBio = document.getElementById('displayBio');
+            const displaySkills = document.getElementById('displaySkills');
+            
+            if (displayIndustry) displayIndustry.textContent = user.industry || '-';
+            if (displayLocation) displayLocation.textContent = user.location || '-';
+            if (displayWebsite) {
+                if (user.website) {
+                    const websiteUrl = user.website.startsWith('http') ? user.website : `https://${user.website}`;
+                    displayWebsite.innerHTML = `<a href="${escapeHtml(websiteUrl)}" target="_blank" style="color: var(--primary);">${escapeHtml(user.website)}</a>`;
+                } else {
+                    displayWebsite.textContent = '-';
+                }
+            }
+            if (displayName) displayName.textContent = user.name || '-';
+            if (displayEmail) displayEmail.textContent = user.email || '-';
+            if (displayPhone) displayPhone.textContent = user.phone || '-';
+            if (displayBio) {
+                if (user.bio) {
+                    displayBio.innerHTML = `<p style="margin: 0; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(user.bio)}</p>`;
+                } else {
+                    displayBio.innerHTML = '<p class="subtle">No description provided.</p>';
+                }
+            }
+            if (displaySkills) {
+                if (user.skills) {
+                    const skills = user.skills.split(',').map(s => s.trim()).filter(s => s);
+                    displaySkills.innerHTML = skills.map(skill => 
+                        `<span class="pill blue">${escapeHtml(skill)}</span>`
+                    ).join('');
+                } else {
+                    displaySkills.innerHTML = '<span class="subtle">No skills specified.</span>';
+                }
             }
             
             // Update avatar initials and image
@@ -862,56 +891,6 @@
                 }
             }
             
-            // Update industry
-            const industryItems = document.querySelectorAll('.info-item');
-            industryItems.forEach(item => {
-                const label = item.querySelector('.label');
-                if (label && label.textContent.includes('Industry')) {
-                    const valueSpan = item.querySelector('span:last-child');
-                    if (valueSpan && user.industry) {
-                        valueSpan.textContent = user.industry;
-                    }
-                }
-            });
-            
-            // Update email
-            industryItems.forEach(item => {
-                const label = item.querySelector('.label');
-                if (label && label.textContent.includes('Email')) {
-                    const valueSpan = item.querySelector('span:last-child');
-                    if (valueSpan && user.email) {
-                        valueSpan.textContent = user.email;
-                    }
-                }
-            });
-            
-            // Update location
-            industryItems.forEach(item => {
-                const label = item.querySelector('.label');
-                if (label && label.textContent.includes('Location')) {
-                    const valueSpan = item.querySelector('span:last-child');
-                    if (valueSpan && user.location) {
-                        valueSpan.textContent = user.location;
-                    }
-                }
-            });
-            
-            // Update bio/description
-            const aboutSection = document.querySelector('.section.mb-20 p');
-            if (aboutSection && user.bio) {
-                aboutSection.textContent = user.bio;
-            }
-            
-            // Update skills
-            if (user.skills) {
-                const skillsContainer = document.querySelector('.flex.gap-10');
-                if (skillsContainer) {
-                    const skills = user.skills.split(',').map(s => s.trim());
-                    skillsContainer.innerHTML = skills.map(skill => 
-                        `<span class="pill blue">${escapeHtml(skill)}</span>`
-                    ).join('');
-                }
-            }
         }
         
         function populateEditForm(user) {
@@ -919,7 +898,9 @@
             document.getElementById('editIndustry').value = user.industry || 'technology';
             document.getElementById('editLocation').value = user.location || '';
             document.getElementById('editWebsite').value = user.website || '';
+            document.getElementById('editPhone').value = user.phone || '';
             document.getElementById('editDescription').value = user.bio || '';
+            document.getElementById('editSkills').value = user.skills || '';
         }
         
         async function loadBusinessStats() {
@@ -935,15 +916,36 @@
         }
         
         function updateBusinessStats(stats) {
-            const statSections = document.querySelectorAll('.grid-4 .section');
-            if (statSections.length >= 3) {
-                const activeGigsDiv = statSections[0].querySelector('div');
-                const totalApplicantsDiv = statSections[1].querySelector('div');
-                const hiredStudentsDiv = statSections[2].querySelector('div');
-                
-                if (activeGigsDiv) activeGigsDiv.textContent = stats.active_gigs || 0;
-                if (totalApplicantsDiv) totalApplicantsDiv.textContent = stats.total_applicants || 0;
-                if (hiredStudentsDiv) hiredStudentsDiv.textContent = stats.hired_students || 0;
+            const activeGigs = document.getElementById('profileActiveGigs');
+            const totalApplicants = document.getElementById('profileTotalApplicants');
+            const hiredStudents = document.getElementById('profileHiredStudents');
+            const averageRating = document.getElementById('profileStatsRating');
+            const profileAverageRating = document.getElementById('profileAverageRating');
+            const profileTotalReviews = document.getElementById('profileTotalReviews');
+            
+            if (activeGigs) activeGigs.textContent = stats.active_gigs || 0;
+            if (totalApplicants) totalApplicants.textContent = stats.total_applicants || 0;
+            if (hiredStudents) hiredStudents.textContent = stats.hired_students || 0;
+            if (averageRating) {
+                if (stats.average_rating && stats.average_rating > 0) {
+                    averageRating.textContent = stats.average_rating.toFixed(1);
+                } else {
+                    averageRating.textContent = '-';
+                }
+            }
+            if (profileAverageRating) {
+                if (stats.average_rating && stats.average_rating > 0) {
+                    profileAverageRating.textContent = `${stats.average_rating.toFixed(1)}/5`;
+                } else {
+                    profileAverageRating.textContent = '-';
+                }
+            }
+            if (profileTotalReviews) {
+                if (stats.total_reviews > 0) {
+                    profileTotalReviews.textContent = `Based on ${stats.total_reviews} review${stats.total_reviews !== 1 ? 's' : ''}`;
+                } else {
+                    profileTotalReviews.textContent = 'No reviews yet';
+                }
             }
         }
         
@@ -1003,13 +1005,26 @@
         // Setup real-time validation for edit form
         function setupBusinessProfileValidation() {
             const websiteInput = document.getElementById('editWebsite');
+            const phoneInput = document.getElementById('editPhone');
             
             if (websiteInput) {
                 websiteInput.addEventListener('blur', function() {
                     const value = this.value.trim();
                     if (value && !validateWebsite(value)) {
                         this.classList.add('error');
-                        showNotification('Please enter a valid website URL (e.g., https://example.com)', 'error');
+                        Toast.error('Please enter a valid website URL (e.g., https://example.com)');
+                    } else {
+                        this.classList.remove('error');
+                    }
+                });
+            }
+            
+            if (phoneInput) {
+                phoneInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    if (value && !validatePhone(value)) {
+                        this.classList.add('error');
+                        Toast.error('Please enter a valid phone number (e.g., +256 700 123 456)');
                     } else {
                         this.classList.remove('error');
                     }
@@ -1030,10 +1045,12 @@
             
             const formData = {
                     name: document.getElementById('editCompanyName').value.trim(),
-                industry: document.getElementById('editIndustry').value,
+                    industry: document.getElementById('editIndustry').value,
                     location: document.getElementById('editLocation').value.trim(),
                     website: document.getElementById('editWebsite').value.trim(),
-                    bio: document.getElementById('editDescription').value.trim()
+                    phone: document.getElementById('editPhone').value.trim(),
+                    bio: document.getElementById('editDescription').value.trim(),
+                    skills: document.getElementById('editSkills').value.trim()
                 };
                 
                 // Validate
@@ -1051,23 +1068,28 @@
                     return;
                 }
                 
+                if (formData.phone && !validatePhone(formData.phone)) {
+                    showNotification('Please enter a valid phone number (e.g., +256 700 123 456)', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+                
                 const response = await apiFetch('/profile', {
                 method: 'POST',
                 body: JSON.stringify(formData)
                 });
                 
                 if (response.success) {
-                    showNotification('Profile updated successfully!', 'success');
-                    
-                    // Update stored user data
-                    const user = Auth.getUser();
-                    Object.assign(user, formData);
-                    Auth.setUser(user);
+                    Toast.success('Profile updated successfully!');
                     
                     closeEditModal();
                     
-                    // Update displayed profile info
-                    updateProfileInfo(user);
+                    // Reload profile data from API to get updated info
+                    await loadProfileData();
+                    
+                    // Reload business stats
+                    await loadBusinessStats();
                 } else {
                     showNotification(response.error || 'Failed to update profile', 'error');
                     submitBtn.disabled = false;

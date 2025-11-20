@@ -56,7 +56,7 @@
                     <div class="subtle">Hired Students</div>
                 </div>
                 <div class="section" style="text-align: center;">
-                    <div style="font-size:32px; font-weight:800; color:var(--info);">4.7</div>
+                    <div style="font-size:32px; font-weight:800; color:var(--info);" id="averageRating">-</div>
                     <div class="subtle">Average Rating</div>
                 </div>
             </div>
@@ -66,21 +66,7 @@
                 <div class="section">
                     <h2 class="h2">Recent Activity</h2>
                     <div id="recentActivity">
-                        <div class="activity-item">
-                            <div style="font-weight:600;">New Application</div>
-                            <p class="subtle">Amanya Peter applied to "Website Development"</p>
-                            <div class="subtle" style="font-size:12px;">2 hours ago</div>
-                        </div>
-                        <div class="activity-item">
-                            <div style="font-weight:600;">Gig Posted</div>
-                            <p class="subtle">Successfully posted "Social Media Management"</p>
-                            <div class="subtle" style="font-size:12px;">1 day ago</div>
-                        </div>
-                        <div class="activity-item">
-                            <div style="font-weight:600;">Student Hired</div>
-                            <p class="subtle">Accepted Sarah's application for "Graphic Design"</p>
-                            <div class="subtle" style="font-size:12px;">2 days ago</div>
-                        </div>
+                        <p class="subtle" style="text-align: center; padding: 20px;">Loading recent activity...</p>
                     </div>
                 </div>
                 <div class="section">
@@ -199,6 +185,7 @@
                 const response = await apiFetch('/dashboard');
                 if (response.success) {
                     updateDashboardStats(response.stats);
+                    updateRecentActivity(response.recent_activity || []);
                     loadRecentApplications();
                     loadTopGigs();
                 }
@@ -361,10 +348,43 @@
             const activeGigs = document.getElementById('activeGigs');
             const totalApplicants = document.getElementById('totalApplicants');
             const hiredStudents = document.getElementById('hiredStudents');
+            const averageRating = document.getElementById('averageRating');
             
             if (activeGigs) activeGigs.textContent = stats.active_gigs || 0;
             if (totalApplicants) totalApplicants.textContent = stats.total_applicants || 0;
             if (hiredStudents) hiredStudents.textContent = stats.hired_students || 0;
+            if (averageRating) {
+                if (stats.average_rating && stats.average_rating > 0) {
+                    averageRating.textContent = stats.average_rating.toFixed(1);
+                } else {
+                    averageRating.textContent = '-';
+                }
+            }
+        }
+        
+        // Update recent activity
+        function updateRecentActivity(activities) {
+            const container = document.getElementById('recentActivity');
+            if (!container) return;
+            
+            if (!activities || activities.length === 0) {
+                container.innerHTML = '<p class="subtle" style="text-align: center; padding: 20px;">No recent activity</p>';
+                return;
+            }
+            
+            // Show only the most recent 3 activities
+            const recentActivities = activities.slice(0, 3);
+            
+            container.innerHTML = recentActivities.map(activity => {
+                const timeAgo = formatTimeAgo(activity.date);
+                return `
+                    <div class="activity-item">
+                        <div style="font-weight:600;">${escapeHtml(activity.title)}</div>
+                        <p class="subtle">${escapeHtml(activity.message)}</p>
+                        <div class="subtle" style="font-size:12px;">${timeAgo}</div>
+                    </div>
+                `;
+            }).join('');
         }
         
         async function loadRecentApplications() {

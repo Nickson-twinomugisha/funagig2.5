@@ -71,7 +71,6 @@
                             </div>
                         </div>
                         <button class="btn secondary" onclick="viewStudentProfile()">View Profile</button>
-                        <button class="btn ghost" onclick="viewGigDetails()">View Gig</button>
                     </div>
                 </div>
                 
@@ -98,12 +97,28 @@
                     <div class="chat-input-row">
                         <input type="file" id="fileInput" accept="image/*,application/pdf,.doc,.docx,.txt" style="display:none;" />
                         <button class="btn-icon" id="attachBtn" onclick="document.getElementById('fileInput').click()" title="Attach File">📎</button>
-                        <textarea id="messageInput" placeholder="Type your message..." rows="1"></textarea>
+                        <textarea id="messageInput" placeholder="Type message..." rows="1"></textarea>
                         <button id="sendBtn" class="btn-icon" onclick="sendMessage()" title="Send">➤</button>
                     </div>
                 </div>
             </div>
         </main>
+    </div>
+    
+    <!-- Student Profile Modal -->
+    <div id="studentProfileModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="studentProfileModalTitle">Student Profile</h2>
+                <button class="btn-icon" onclick="closeStudentProfileModal()" style="font-size: 24px; background: none; border: none; cursor: pointer;">×</button>
+            </div>
+            <div class="modal-body" id="studentProfileContent">
+                <div style="text-align: center; padding: 40px;">
+                    <div class="loading-spinner"></div>
+                    <p class="subtle">Loading profile...</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
@@ -979,19 +994,159 @@
             }
         }
 
-        // View student profile
-        function viewStudentProfile() {
-            if (currentStudentId) {
-                // In a full implementation, navigate to student profile page
-                showNotification('Student profile view coming soon', 'info');
+        // View student profile - Show modal with student details
+        async function viewStudentProfile() {
+            if (!currentStudentId) {
+                Toast.error('No student selected');
+                return;
+            }
+            
+            try {
+                // Show modal with loading state
+                const modal = document.getElementById('studentProfileModal');
+                const content = document.getElementById('studentProfileContent');
+                if (modal) modal.style.display = 'flex';
+                if (content) {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <div class="loading-spinner"></div>
+                            <p class="subtle">Loading profile...</p>
+                        </div>
+                    `;
+                }
+                
+                // Fetch student profile
+                const response = await apiFetch(`/users/${currentStudentId}`, {
+                    silent: true
+                });
+                
+                if (response.success && response.user) {
+                    displayStudentProfile(response.user);
+                } else {
+                    closeStudentProfileModal();
+                    Toast.error('Failed to load student profile');
+                }
+                
+            } catch (error) {
+                closeStudentProfileModal();
+                console.error('Error loading student profile:', error);
+                Toast.error('Failed to load student profile. Please try again.');
             }
         }
-
-        // View gig details
-        function viewGigDetails() {
-            // In a full implementation, navigate to gig details page
-            showNotification('Gig details view coming soon', 'info');
+        
+        // Display student profile in modal
+        function displayStudentProfile(student) {
+            const content = document.getElementById('studentProfileContent');
+            const title = document.getElementById('studentProfileModalTitle');
+            
+            if (!content) return;
+            
+            const initials = (student.name || 'S').split(' ').map(n => n[0]).join('').toUpperCase();
+            const skills = student.skills ? student.skills.split(',').map(s => s.trim()) : [];
+            const createdDate = new Date(student.created_at).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            if (title) title.textContent = escapeHtml(student.name || 'Student Profile');
+            
+            content.innerHTML = `
+                <div style="padding: 20px;">
+                    <!-- Header -->
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                        <div class="cover-img" style="width: 80px; height: 80px; font-size: 32px; position: relative; overflow: hidden;">
+                            ${student.profile_image ? 
+                                `<img src="${escapeHtml(student.profile_image)}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.textContent='${initials}';">` : 
+                                initials
+                            }
+                        </div>
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 8px 0; font-size: 24px; color: var(--text-primary);">${escapeHtml(student.name || 'Student')}</h3>
+                            ${student.is_verified ? '<span class="pill green" style="margin-bottom: 8px; display: inline-block;">Verified</span>' : ''}
+                            ${student.university || student.major ? 
+                                `<p class="subtle" style="margin: 4px 0;">${escapeHtml([student.university, student.major].filter(Boolean).join(' • ') || '')}</p>` : 
+                                ''
+                            }
+                            ${student.location ? 
+                                `<p class="subtle" style="margin: 4px 0; font-size: 14px;">📍 ${escapeHtml(student.location)}</p>` : 
+                                ''
+                            }
+                        </div>
+                        ${student.rating && student.rating > 0 ? `
+                            <div style="text-align: right;">
+                                <div style="font-size: 24px; font-weight: 600; color: var(--warning);">${parseFloat(student.rating).toFixed(1)}</div>
+                                <div class="subtle" style="font-size: 12px;">${student.total_ratings || 0} review${(student.total_ratings || 0) !== 1 ? 's' : ''}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Bio -->
+                    ${student.bio ? `
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 16px; color: var(--text-primary);">About</h4>
+                            <p style="margin: 0; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap;">${escapeHtml(student.bio)}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Details Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                        ${student.university ? `
+                            <div>
+                                <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">University</div>
+                                <div style="font-size: 16px; font-weight: 500;">${escapeHtml(student.university)}</div>
+                            </div>
+                        ` : ''}
+                        ${student.major ? `
+                            <div>
+                                <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Major</div>
+                                <div style="font-size: 16px; font-weight: 500;">${escapeHtml(student.major)}</div>
+                            </div>
+                        ` : ''}
+                        ${student.industry ? `
+                            <div>
+                                <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Industry Interest</div>
+                                <div style="font-size: 16px; font-weight: 500;">${escapeHtml(student.industry)}</div>
+                            </div>
+                        ` : ''}
+                        <div>
+                            <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Member Since</div>
+                            <div style="font-size: 16px; font-weight: 500;">${createdDate}</div>
+                        </div>
+                        ${student.completed_gigs_count !== undefined ? `
+                            <div>
+                                <div class="subtle" style="font-size: 12px; margin-bottom: 4px;">Completed Gigs</div>
+                                <div style="font-size: 16px; font-weight: 500;">${student.completed_gigs_count || 0}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Skills -->
+                    ${skills.length > 0 ? `
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 16px; color: var(--text-primary);">Skills</h4>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${skills.map(skill => `<span class="pill blue">${escapeHtml(skill)}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
         }
+        
+        // Close student profile modal
+        function closeStudentProfileModal() {
+            const modal = document.getElementById('studentProfileModal');
+            if (modal) modal.style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('studentProfileModal');
+            if (modal && event.target === modal) {
+                closeStudentProfileModal();
+            }
+        });
 
         // Get current user ID
         function getCurrentUserId() {
@@ -1296,25 +1451,7 @@
             color: rgba(255, 255, 255, 0.7);
         }
 
-        .chat-input-area {
-            padding: 15px 20px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            align-items: flex-end;
-            gap: 10px;
-            background: var(--panel);
-        }
-
-        .chat-input-area textarea {
-            flex: 1;
-            padding: 10px 15px;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            resize: none;
-            max-height: 120px;
-            font-family: inherit;
-            font-size: 14px;
-        }
+        /* Chat input styles are handled by styles.css */
 
         .btn-icon {
             width: 40px;
