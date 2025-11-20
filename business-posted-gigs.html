@@ -48,6 +48,7 @@
                     <div class="field">
                         <select class="select" id="statusFilter">
                             <option value="">All Status</option>
+                            <option value="draft">Drafts</option>
                             <option value="active">Active</option>
                             <option value="paused">Paused</option>
                             <option value="completed">Completed</option>
@@ -224,6 +225,7 @@
                         <div class="field">
                             <label class="label">Status *</label>
                             <select id="editGigStatus" class="select" required>
+                                <option value="draft">Draft</option>
                                 <option value="active">Active</option>
                                 <option value="paused">Paused</option>
                                 <option value="completed">Completed</option>
@@ -323,7 +325,7 @@
             }
         }
         
-        // Load gigs from API
+        // Load gigs from API (including drafts)
         async function loadGigs() {
             const gigsList = document.getElementById('gigsList');
             if (!gigsList) return;
@@ -332,7 +334,8 @@
             Loading.show(gigsList, 'Loading gigs...');
             
             try {
-                const response = await apiFetch('/gigs/active');
+                // Include drafts in the request
+                const response = await apiFetch('/gigs/active?include_drafts=true');
                 Loading.hide(gigsList);
                 
                 if (response.success && response.gigs) {
@@ -406,6 +409,7 @@
             // Generate gig cards for current page
             gigsList.innerHTML = paginated.data.map(gig => {
                 const statusColors = {
+                    'draft': 'gray',
                     'active': 'green',
                     'paused': 'yellow',
                     'completed': 'blue',
@@ -413,6 +417,7 @@
                 };
                 
                 const statusColor = statusColors[gig.status] || 'yellow';
+                const isDraft = gig.status === 'draft';
                 const deadline = new Date(gig.deadline).toLocaleDateString('en-US', { 
                     year: 'numeric', 
                     month: 'short', 
@@ -449,9 +454,15 @@
                                 ${gig.skills ? `<div class="mt-10"><span class="subtle">Skills: </span>${escapeHtml(gig.skills)}</div>` : ''}
                             </div>
                             <div class="flex gap-10" style="flex-direction: column;">
-                                <a href="business-applicants.html?gig=${gig.id}" class="btn secondary">View Applicants</a>
-                                <button class="btn ghost" onclick="editGig(${gig.id})">Edit</button>
-                                <button class="btn ghost" style="color: var(--danger);" onclick="deleteGig(${gig.id}, '${escapeHtml(gig.title)}')">Delete</button>
+                                ${isDraft ? `
+                                    <button class="btn" onclick="publishDraft(${gig.id}, '${escapeHtml(gig.title)}')">Publish</button>
+                                    <button class="btn ghost" onclick="editGig(${gig.id})">Edit</button>
+                                    <button class="btn ghost" style="color: var(--danger);" onclick="deleteGig(${gig.id}, '${escapeHtml(gig.title)}')">Delete</button>
+                                ` : `
+                                    <a href="business-applicants.html?gig=${gig.id}" class="btn secondary">View Applicants</a>
+                                    <button class="btn ghost" onclick="editGig(${gig.id})">Edit</button>
+                                    <button class="btn ghost" style="color: var(--danger);" onclick="deleteGig(${gig.id}, '${escapeHtml(gig.title)}')">Delete</button>
+                                `}
                             </div>
                         </div>
                     </div>
@@ -759,6 +770,67 @@
                 showNotification('Failed to update gig. Please try again.', 'error');
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
+            }
+        }
+        
+        // Publish a draft gig
+        async function publishDraft(gigId, gigTitle) {
+            if (!confirm(`Are you sure you want to publish "${gigTitle}"? This will make it visible to all students.`)) {
+                return;
+            }
+            
+            try {
+                // First, get the draft gig details
+                const getResponse = await apiFetch(`/gigs/${gigId}`);
+                
+                if (!getResponse.success || !getResponse.gig) {
+                    Toast.error('Failed to load draft details');
+                    return;
+                }
+                
+                const draft = getResponse.gig;
+                
+                // Validate that required fields are filled
+                if (!draft.title || draft.title === 'Untitled Draft' || !draft.description || !draft.budget || !draft.deadline) {
+                    Toast.error('Please complete all required fields (title, description, budget, deadline) before publishing.');
+                    return;
+                }
+                
+                // Validate deadline is in the future
+                const deadlineDate = new Date(draft.deadline);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                if (deadlineDate <= today) {
+                    Toast.error('Please set a future deadline before publishing.');
+                    return;
+                }
+                
+                // Update the gig status to 'active' - send all required fields
+                const updateResponse = await apiFetch('/gigs/update', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        gig_id: gigId,
+                        title: draft.title,
+                        description: draft.description,
+                        budget: parseFloat(draft.budget),
+                        deadline: draft.deadline,
+                        type: draft.type || 'one-time',
+                        skills: draft.skills || '',
+                        location: draft.location || 'Remote',
+                        status: 'active'
+                    })
+                });
+                
+                if (updateResponse.success) {
+                    Toast.success('Gig published successfully!');
+                    await loadGigs();
+                } else {
+                    Toast.error(updateResponse.error || 'Failed to publish gig');
+                }
+            } catch (error) {
+                console.error('Error publishing draft:', error);
+                Toast.error('Failed to publish gig. Please try again.');
             }
         }
         

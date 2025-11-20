@@ -168,12 +168,11 @@
                 await submitGig();
             });
             
-            // Save as draft button (placeholder)
+            // Save as draft button
             const saveDraftBtn = document.getElementById('saveDraftBtn');
             if (saveDraftBtn) {
-                saveDraftBtn.addEventListener('click', function() {
-                    showNotification('Draft functionality coming soon', 'info');
-                    // TODO: Implement draft saving
+                saveDraftBtn.addEventListener('click', async function() {
+                    await saveDraft();
                 });
             }
         }
@@ -380,6 +379,51 @@
             return isValid;
         }
         
+        // Save as draft
+        async function saveDraft() {
+            const saveDraftBtn = document.getElementById('saveDraftBtn');
+            
+            try {
+                // Show loading state
+                Loading.setButtonLoading(saveDraftBtn, true);
+                saveDraftBtn.textContent = 'Saving...';
+                
+                // Get form values (all fields optional for drafts)
+                const gigData = {
+                    title: document.getElementById('gigTitle').value.trim() || 'Untitled Draft',
+                    description: document.getElementById('gigDescription').value.trim() || '',
+                    type: document.getElementById('gigType').value || 'one-time',
+                    skills: document.getElementById('skills').value.trim() || '',
+                    budget: document.getElementById('budget').value ? parseFloat(document.getElementById('budget').value) : 0,
+                    deadline: document.getElementById('deadline').value || null,
+                    location: document.getElementById('location').value.trim() || 'Remote',
+                    status: 'draft' // Set status to draft
+                };
+                
+                // Submit to API
+                const response = await apiFetch('/gigs', {
+                    method: 'POST',
+                    body: JSON.stringify(gigData)
+                });
+                
+                if (response.success) {
+                    showNotification('Draft saved successfully!', 'success');
+                    // Don't redirect - allow user to continue editing
+                    Loading.setButtonLoading(saveDraftBtn, false);
+                    saveDraftBtn.textContent = 'Save as Draft';
+                } else {
+                    showNotification(response.error || 'Failed to save draft', 'error');
+                    Loading.setButtonLoading(saveDraftBtn, false);
+                    saveDraftBtn.textContent = 'Save as Draft';
+                }
+            } catch (error) {
+                console.error('Error saving draft:', error);
+                showNotification('Failed to save draft. Please try again.', 'error');
+                Loading.setButtonLoading(saveDraftBtn, false);
+                saveDraftBtn.textContent = 'Save as Draft';
+            }
+        }
+        
         // Submit gig to API
         async function submitGig() {
             const submitBtn = document.querySelector('#post-gig-form button[type="submit"]');
@@ -398,7 +442,8 @@
                     skills: document.getElementById('skills').value.trim(),
                     budget: parseFloat(document.getElementById('budget').value),
                     deadline: document.getElementById('deadline').value,
-                    location: document.getElementById('location').value.trim() || 'Remote'
+                    location: document.getElementById('location').value.trim() || 'Remote',
+                    status: 'active' // Set status to active when posting (not saving as draft)
                 };
                 
                 // Submit to API

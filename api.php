@@ -64,6 +64,9 @@ switch ($path) {
     case '/saved-gigs':
         handleSavedGigs();
         break;
+    case '/interested-gigs':
+        handleInterestedGigs();
+        break;
     case '/notifications':
         handleNotifications();
         break;
@@ -181,6 +184,9 @@ function handleLogin() {
         if (!$user || !verifyPassword($password, $user['password'])) {
             sendError('Invalid credentials');
         }
+        
+        // Regenerate session ID to prevent session fixation attacks
+        session_regenerate_id(true);
         
         // Set session
         $_SESSION['user_id'] = $user['id'];
@@ -631,7 +637,7 @@ function handleGigs() {
                     sendError('Deadline is required');
                 }
                 if (strtotime($deadline) <= time()) {
-                    sendError('Deadline must be in the future');
+                sendError('Deadline must be in the future');
                 }
             }
             
@@ -690,15 +696,15 @@ function handleActiveGigs() {
             );
         } else {
             // Default: only active gigs (backward compatible)
-            $gigs = $db->fetchAll(
-                "SELECT g.*, 
-                 (SELECT COUNT(*) FROM applications WHERE gig_id = g.id) as applicant_count,
-                 (SELECT COUNT(*) FROM applications WHERE gig_id = g.id AND status = 'accepted') as hired_count
-                 FROM gigs g 
-                 WHERE g.user_id = ? AND g.status = 'active' 
-                 ORDER BY g.created_at DESC",
-                [$user['id']]
-            );
+        $gigs = $db->fetchAll(
+            "SELECT g.*, 
+             (SELECT COUNT(*) FROM applications WHERE gig_id = g.id) as applicant_count,
+             (SELECT COUNT(*) FROM applications WHERE gig_id = g.id AND status = 'accepted') as hired_count
+             FROM gigs g 
+             WHERE g.user_id = ? AND g.status = 'active' 
+             ORDER BY g.created_at DESC",
+            [$user['id']]
+        );
         }
     } else {
         // For students, always show only active gigs (never show drafts)
@@ -1050,14 +1056,34 @@ function handleUpdateGig() {
     $gigId = $input['gig_id'];
     $userId = $_SESSION['user_id'];
     
-    // Validate required fields
-    if (empty($input['title']) || empty($input['description']) || empty($input['budget']) || empty($input['deadline'])) {
+    $db = Database::getInstance();
+    
+    // Get existing gig to check current status and fill in missing fields
+    $existingGig = $db->fetchOne("SELECT * FROM gigs WHERE id = ?", [$gigId]);
+    if (!$existingGig) {
+        sendError('Gig not found', 404);
+        return;
+    }
+    
+    // Verify ownership
+    if ($existingGig['user_id'] != $userId) {
+        sendError('Gig not found or access denied', 403);
+        return;
+    }
+    
+    // Use provided values or fall back to existing values for partial updates
+    $title = $input['title'] ?? $existingGig['title'];
+    $description = $input['description'] ?? $existingGig['description'];
+    $budget = $input['budget'] ?? $existingGig['budget'];
+    $deadline = $input['deadline'] ?? $existingGig['deadline'];
+    
+    if (empty($title) || empty($description) || empty($budget) || empty($deadline)) {
         sendError('All required fields must be filled');
         return;
     }
     
-    // Validate status enum
-    $validStatuses = ['active', 'paused', 'completed', 'cancelled'];
+    // Validate status enum (include 'draft' for editing drafts)
+    $validStatuses = ['draft', 'active', 'paused', 'completed', 'cancelled'];
     if (isset($input['status']) && !in_array($input['status'], $validStatuses)) {
         sendError('Invalid status value');
         return;
@@ -1071,42 +1097,43 @@ function handleUpdateGig() {
     }
     
     // Validate budget
-    if (isset($input['budget']) && (!is_numeric($input['budget']) || $input['budget'] < 0)) {
+    if (!is_numeric($budget) || $budget < 0) {
         sendError('Budget must be a positive number');
         return;
     }
     
     // Validate text lengths
-    if (isset($input['title']) && strlen($input['title']) > 255) {
+    if (strlen($title) > 255) {
         sendError('Title must be 255 characters or less');
         return;
     }
     
-    $db = Database::getInstance();
+    // Use provided values or fall back to existing values
+    $status = $input['status'] ?? $existingGig['status'];
+    $type = $input['type'] ?? $existingGig['type'];
+    $skills = $input['skills'] ?? $existingGig['skills'] ?? '';
+    $location = $input['location'] ?? $existingGig['location'] ?? 'Remote';
     
-    // Verify gig ownership before updating
-    $gig = $db->fetchOne("SELECT user_id FROM gigs WHERE id = ?", [$gigId]);
-    if (!$gig) {
-        sendError('Gig not found', 404);
-        return;
-    }
-    if ($gig['user_id'] != $userId) {
-        sendError('Gig not found or access denied', 403);
-        return;
+    // Validate deadline if status is being changed to active (and it's not a draft)
+    if ($status === 'active' && $existingGig['status'] !== 'active') {
+        if (strtotime($deadline) <= time()) {
+            sendError('Deadline must be in the future when publishing a gig');
+            return;
+        }
     }
     
     $affected = $db->update(
         "UPDATE gigs SET title=?, description=?, budget=?, deadline=?, status=?, type=?, skills=?, location=? 
          WHERE id=? AND user_id=?",
         [
-            sanitizeInput($input['title']),
-            sanitizeInput($input['description']),
-            $input['budget'],
-            $input['deadline'],
-            $input['status'] ?? 'active',
-            sanitizeInput($input['type'] ?? 'one-time'),
-            sanitizeInput($input['skills'] ?? ''),
-            sanitizeInput($input['location'] ?? 'Remote'),
+            sanitizeInput($title),
+            sanitizeInput($description),
+            $budget,
+            $deadline,
+            $status,
+            sanitizeInput($type),
+            sanitizeInput($skills),
+            sanitizeInput($location),
             $gigId,
             $userId
         ]
@@ -1352,6 +1379,31 @@ function handleSavedGigs() {
         );
         
         sendResponse(['success' => $affected > 0]);
+    } else {
+        sendError('Method not allowed', 405);
+    }
+}
+
+// Interested gigs handler
+function handleInterestedGigs() {
+    requireAuth();
+    
+    $userId = $_SESSION['user_id'];
+    $db = Database::getInstance();
+    
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Get interested gigs for the user
+        $interestedGigs = $db->fetchAll(
+            "SELECT g.*, ig.interested_at, u.name as business_name
+             FROM interested_gigs ig
+             JOIN gigs g ON ig.gig_id = g.id
+             JOIN users u ON g.user_id = u.id
+             WHERE ig.user_id = ? AND g.status = 'active'
+             ORDER BY ig.interested_at DESC",
+            [$userId]
+        );
+        
+        sendResponse(['success' => true, 'interested_gigs' => $interestedGigs]);
     } else {
         sendError('Method not allowed', 405);
     }
@@ -2396,17 +2448,32 @@ function handleTyping() {
 
 // Get single gig by ID
 function handleGetGig($gigId) {
-    // Allow public access (no auth required) for viewing gigs
+    // Allow public access (no auth required) for viewing active gigs
+    // But allow authenticated users to view their own drafts
     $db = Database::getInstance();
     
-    // Fetch gig with business information
-    $gig = $db->fetchOne(
-        "SELECT g.*, u.name as business_name, u.industry, u.location as business_location, u.rating as business_rating
-         FROM gigs g 
-         JOIN users u ON g.user_id = u.id 
-         WHERE g.id = ? AND g.status = 'active'",
-        [$gigId]
-    );
+    // Check if user is authenticated and is the owner
+    $userId = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
+    
+    // Build query - allow viewing drafts if user is the owner
+    if ($userId) {
+        $gig = $db->fetchOne(
+            "SELECT g.*, u.name as business_name, u.industry, u.location as business_location, u.rating as business_rating
+             FROM gigs g 
+             JOIN users u ON g.user_id = u.id 
+             WHERE g.id = ? AND (g.status = 'active' OR (g.status = 'draft' AND g.user_id = ?))",
+            [$gigId, $userId]
+        );
+    } else {
+        // Public access - only active gigs
+        $gig = $db->fetchOne(
+            "SELECT g.*, u.name as business_name, u.industry, u.location as business_location, u.rating as business_rating
+             FROM gigs g 
+             JOIN users u ON g.user_id = u.id 
+             WHERE g.id = ? AND g.status = 'active'",
+            [$gigId]
+        );
+    }
     
     if (!$gig) {
         sendError('Gig not found', 404);

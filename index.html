@@ -164,10 +164,61 @@
         });
 
         // Contact form (from contact.html)
-        document.getElementById('contact-form').addEventListener('submit', function(e) {
+        document.getElementById('contact-form').addEventListener('submit', async function(e) {
             e.preventDefault();
-            alert('Message sent!');
-            this.reset();
+            
+            const form = this;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Get form values
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const subject = document.getElementById('subject').value;
+            const message = document.getElementById('message').value.trim();
+            
+            // Basic validation
+            if (!name || !email || !message) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+            
+            // Email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Please enter a valid email address.');
+                return;
+            }
+            
+            try {
+                // Show loading state
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Sending...';
+                
+                // Submit to API
+                const response = await apiFetch('/contact', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        subject: subject,
+                        message: message
+                    })
+                });
+                
+                if (response.success) {
+                    alert('Message sent successfully! We\'ll get back to you soon.');
+                    form.reset();
+                } else {
+                    alert(response.error || 'Failed to send message. Please try again.');
+                }
+            } catch (error) {
+                console.error('Contact form error:', error);
+                alert('Failed to send message. Please check your connection and try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
         });
     </script>
     <script src="app.js"></script>

@@ -89,11 +89,14 @@ POST /php/api.php/profile
 
 ### Gigs Management
 ```
-GET /php/api.php/gigs          # List all active gigs
-POST /php/api.php/gigs         # Create new gig
-GET /php/api.php/gigs/active   # Get user's active gigs
-PUT /php/api.php/gigs/update   # Update gig
-DELETE /php/api.php/gigs/delete # Delete gig
+GET /php/api.php/gigs              # List all active gigs (with pagination)
+POST /php/api.php/gigs             # Create new gig (supports 'draft' status)
+GET /php/api.php/gigs/{id}         # Get single gig by ID (public access for active, owner access for drafts)
+GET /php/api.php/gigs/active       # Get user's active gigs (supports include_drafts=true)
+POST /php/api.php/gigs/update      # Update gig (supports partial updates)
+DELETE /php/api.php/gigs/delete    # Delete gig
+POST /php/api.php/gigs/{id}/interest   # Show interest in a gig
+DELETE /php/api.php/gigs/{id}/interest # Remove interest from a gig
 ```
 
 ### Applications
@@ -132,15 +135,31 @@ GET /php/api.php/reviews/{user_id}      # Get user reviews
 
 ### Password Reset
 ```
-POST /php/api.php/auth/forgot-password  # Request password reset
-POST /php/api.php/auth/reset-password   # Reset password
+POST /php/api.php/auth/forgot-password  # Request password reset (sends email)
+POST /php/api.php/auth/reset-password    # Reset password with token
+GET /php/api.php/auth/session-status     # Check session status (for WebSocket validation)
 ```
 
 ### Saved Gigs
 ```
 GET /php/api.php/saved-gigs            # Get saved gigs
-POST /php/api.php/saved-gigs            # Save gig
-DELETE /php/api.php/saved-gigs          # Unsave gig
+POST /php/api.php/saved-gigs           # Save gig
+DELETE /php/api.php/saved-gigs         # Unsave gig (use ?gig_id={id} query parameter)
+```
+
+### Interested Gigs
+```
+GET /php/api.php/interested-gigs      # Get gigs user has shown interest in
+```
+
+### Public Profiles
+```
+GET /php/api.php/users/{id}            # Get public user profile (limited information)
+```
+
+### Contact
+```
+POST /php/api.php/contact              # Submit contact form (name, email, subject, message)
 ```
 
 ### Portfolio
@@ -221,7 +240,7 @@ CREATE TABLE gigs (
     skills TEXT NULL,
     location VARCHAR(255) NULL,
     type ENUM('one-time', 'ongoing', 'contract') DEFAULT 'one-time',
-    status ENUM('active', 'paused', 'completed', 'cancelled') DEFAULT 'active',
+    status ENUM('draft', 'active', 'paused', 'completed', 'cancelled') DEFAULT 'draft',
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 ```

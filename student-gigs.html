@@ -557,10 +557,29 @@
             }
         }
         
-        // Show interest (placeholder - could be enhanced later)
-        function showInterest(gigId, gigTitle) {
-            showNotification(`Interest noted for "${gigTitle}"!`, 'info');
-            // TODO: Could store interest in database or send notification to business
+        // Show interest - connect to API
+        async function showInterest(gigId, gigTitle) {
+            try {
+                const response = await apiFetch(`/gigs/${gigId}/interest`, {
+                    method: 'POST'
+                });
+                
+                if (response.success) {
+                    Toast.success(`Interest noted for "${gigTitle}"!`);
+                    
+                    // Update button state if needed (optional enhancement)
+                    const interestBtn = document.querySelector(`button[onclick*="showInterest(${gigId}"]`);
+                    if (interestBtn) {
+                        interestBtn.textContent = '✓ Interested';
+                        interestBtn.classList.add('secondary');
+                    }
+                } else {
+                    Toast.error(response.error || 'Failed to show interest');
+                }
+            } catch (error) {
+                console.error('Error showing interest:', error);
+                Toast.error('Failed to show interest. Please try again.');
+            }
         }
         
         // Setup search and sort functionality
@@ -1034,11 +1053,7 @@
             } else if (tabId === 'browse') {
                 filterGigs();
             } else if (tabId === 'interested') {
-                // For now, show message - could implement later
-                const interestedContainer = document.getElementById('interested-list');
-                if (interestedContainer) {
-                    interestedContainer.innerHTML = '<p class="subtle" style="text-align: center; padding: 40px;">Interested gigs feature coming soon.</p>';
-                }
+                loadInterestedGigs();
             } else if (tabId === 'applications') {
                 loadApplications();
             }
@@ -1151,6 +1166,139 @@
         function filterApplications() {
             applicationsCurrentPage = 1;
             loadApplications();
+        }
+
+        // Load interested gigs
+        let interestedGigs = [];
+        let interestedCurrentPage = 1;
+        const interestedPerPage = 12;
+
+        async function loadInterestedGigs() {
+            const interestedContainer = document.getElementById('interested-list');
+            if (!interestedContainer) return;
+
+            Loading.show(interestedContainer, 'Loading interested gigs...');
+
+            try {
+                const response = await apiFetch('/interested-gigs');
+                Loading.hide(interestedContainer);
+
+                if (response.success && response.interested_gigs) {
+                    interestedGigs = response.interested_gigs;
+                    displayInterestedGigs(interestedGigs);
+                } else {
+                    EmptyState.show(
+                        interestedContainer,
+                        '💭',
+                        'No Interested Gigs',
+                        'You haven\'t shown interest in any gigs yet. Browse gigs and click "Interest" to save them here.',
+                        '<button class="btn" onclick="showTab(\'browse\')">Browse Gigs</button>'
+                    );
+                }
+            } catch (error) {
+                console.error('Failed to load interested gigs:', error);
+                Loading.hide(interestedContainer);
+                EmptyState.show(
+                    interestedContainer,
+                    '⚠️',
+                    'Unable to Load Interested Gigs',
+                    'There was an error loading your interested gigs. Please try again.',
+                    '<button class="btn" onclick="loadInterestedGigs()">Retry</button>'
+                );
+            }
+        }
+
+        function displayInterestedGigs(gigs) {
+            const interestedContainer = document.getElementById('interested-list');
+            if (!interestedContainer) return;
+
+            if (!gigs || gigs.length === 0) {
+                EmptyState.show(
+                    interestedContainer,
+                    '💭',
+                    'No Interested Gigs',
+                    'You haven\'t shown interest in any gigs yet. Browse gigs and click "Interest" to save them here.',
+                    '<button class="btn" onclick="showTab(\'browse\')">Browse Gigs</button>'
+                );
+                return;
+            }
+
+            // Paginate the results
+            const paginated = Pagination.paginate(gigs, interestedCurrentPage, interestedPerPage);
+
+            interestedContainer.innerHTML = paginated.data.map(gig => {
+                const deadline = new Date(gig.deadline).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                const interestedDate = new Date(gig.interested_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                const skills = gig.skills ? gig.skills.split(',').slice(0, 2) : [];
+
+                return `
+                    <article class="section" style="display:grid; grid-template-columns:160px 1fr auto; gap:16px; margin-top:20px;">
+                        <div style="height:120px; background:#dbeafe; border-radius:12px;"></div>
+                        <div>
+                            <h3 style="margin:0 0 8px 0;">${escapeHtml(gig.title || 'Untitled Gig')}</h3>
+                            <p class="subtle" style="margin-bottom:8px;">${escapeHtml((gig.description || '').substring(0, 100))}${(gig.description || '').length > 100 ? '...' : ''}</p>
+                            <div class="flex items-center gap-10" style="flex-wrap: wrap; margin-top: 8px;">
+                                ${skills.map(skill => `<span class="pill blue">${escapeHtml(skill.trim())}</span>`).join(' ')}
+                                <span class="subtle" style="font-size: 12px;">Budget: sh.${parseInt(gig.budget || 0).toLocaleString()}</span>
+                                <span class="subtle" style="font-size: 12px;">Deadline: ${deadline}</span>
+                            </div>
+                            ${gig.business_name ? `<div class="subtle mt-5" style="font-size: 12px;">By: ${escapeHtml(gig.business_name)}</div>` : ''}
+                            <div class="subtle mt-5" style="font-size: 11px; color: #888;">Interested on: ${interestedDate}</div>
+                        </div>
+                        <div style="display:grid; gap:10px;">
+                            <button class="btn" onclick="applyToGig(${gig.id}, '${escapeHtml(gig.title)}')">Apply</button>
+                            <button class="btn secondary" onclick="removeInterest(${gig.id}, '${escapeHtml(gig.title)}')">Remove Interest</button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
+            // Remove existing pagination
+            const existingPagination = document.getElementById('interestedPagination');
+            if (existingPagination) existingPagination.remove();
+
+            // Add pagination if needed
+            if (paginated.totalPages > 1) {
+                const paginationContainer = Pagination.create(
+                    interestedCurrentPage,
+                    paginated.totalPages,
+                    (page) => {
+                        interestedCurrentPage = page;
+                        displayInterestedGigs(gigs);
+                        interestedContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                );
+                paginationContainer.id = 'interestedPagination';
+                interestedContainer.parentElement.appendChild(paginationContainer);
+            }
+        }
+
+        // Remove interest
+        async function removeInterest(gigId, gigTitle) {
+            try {
+                const response = await apiFetch(`/gigs/${gigId}/interest`, {
+                    method: 'DELETE'
+                });
+
+                if (response.success) {
+                    Toast.success('Interest removed');
+                    // Reload interested gigs
+                    loadInterestedGigs();
+                } else {
+                    Toast.error(response.error || 'Failed to remove interest');
+                }
+            } catch (error) {
+                console.error('Error removing interest:', error);
+                Toast.error('Failed to remove interest');
+            }
         }
 
         // Escape HTML to prevent XSS
